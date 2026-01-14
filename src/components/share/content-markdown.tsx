@@ -76,6 +76,7 @@ export function ContentMarkdown(props: Props) {
 }
 
 function strip(text: string): string {
+  if (!text) return ""
   const wrappedRe = /^\s*<([A-Za-z]\w*)>\s*([\s\S]*?)\s*<\/\1>\s*$/
   const match = text.match(wrappedRe)
   return match ? match[2] : text

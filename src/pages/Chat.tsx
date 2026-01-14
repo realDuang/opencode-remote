@@ -232,11 +232,16 @@ export default function Chat() {
         setMessageStore("part", messageId, index.index, part);
       } else {
         // 插入新 part（保持排序）
-        setMessageStore("part", messageId, (draft) => {
-          const newParts = [...draft];
-          newParts.splice(index.index, 0, part);
-          return newParts;
-        });
+        // 如果该 messageId 的 parts 数组不存在，先初始化
+        if (!messageStore.part[messageId]) {
+          setMessageStore("part", messageId, [part]);
+        } else {
+          setMessageStore("part", messageId, (draft) => {
+            const newParts = [...draft];
+            newParts.splice(index.index, 0, part);
+            return newParts;
+          });
+        }
       }
 
       setTimeout(scrollToBottom, 0);
@@ -256,11 +261,16 @@ export default function Chat() {
         setMessageStore("message", sessionId, index.index, msgInfo);
       } else {
         // 插入新 message（保持排序）
-        setMessageStore("message", sessionId, (draft) => {
-          const newMessages = [...draft];
-          newMessages.splice(index.index, 0, msgInfo);
-          return newMessages;
-        });
+        // 如果该 sessionId 的 messages 数组不存在，先初始化
+        if (!messageStore.message[sessionId]) {
+          setMessageStore("message", sessionId, [msgInfo]);
+        } else {
+          setMessageStore("message", sessionId, (draft) => {
+            const newMessages = [...draft];
+            newMessages.splice(index.index, 0, msgInfo);
+            return newMessages;
+          });
+        }
       }
     }
 
