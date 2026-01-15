@@ -1,4 +1,4 @@
-import { Route, Routes } from "@solidjs/router";
+import { Route } from "@solidjs/router";
 import Login from "./pages/Login";
 import Chat from "./pages/Chat";
 
@@ -7,10 +7,8 @@ function App() {
 
   return (
     <div>
-      <Routes>
-        <Route path="/login" component={Login} />
-        <Route path="/" component={Chat} />
-      </Routes>
+      <Route path="/login" component={Login} />
+      <Route path="/" component={Chat} />
     </div>
   );
 }

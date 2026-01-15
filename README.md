@@ -15,6 +15,7 @@ OpenCode Remote provides a clean, modern web UI for interacting with OpenCode th
 - 📝 **Markdown Support** - Rich text formatting with marked
 - 🔄 **Code Diffs** - Visual code change comparisons
 - 🌓 **Theme Support** - Dark and light mode compatible
+- 🌐 **Internationalization** - English and Simplified Chinese support
 - ⚡ **Fast & Responsive** - Built with SolidJS for optimal performance
 
 ## Quick Start
@@ -89,11 +90,15 @@ opencode-remote/
 ├── src/
 │   ├── pages/                  # Page components
 │   │   ├── Login.tsx          # Login with access code
-│   │   └── Chat.tsx           # Main chat interface
+│   │   ├── Chat.tsx           # Main chat interface
+│   │   ├── Settings.tsx       # Settings page
+│   │   └── RemoteAccess.tsx   # Remote access configuration
 │   ├── components/            # Reusable UI components
 │   │   ├── SessionSidebar.tsx # Session list sidebar
 │   │   ├── MessageList.tsx    # Message display
 │   │   ├── PromptInput.tsx    # User input box
+│   │   ├── ModelSelector.tsx  # Model selection dropdown
+│   │   ├── LanguageSwitcher.tsx # Language switcher
 │   │   └── share/             # Message content renderers
 │   │       ├── part.tsx       # Part component router
 │   │       ├── content-text.tsx
@@ -105,10 +110,15 @@ opencode-remote/
 │   │       └── icons/         # Icon components
 │   ├── lib/                   # Core libraries
 │   │   ├── auth.ts           # Authentication logic
-│   │   └── opencode-client.ts # OpenCode API client
+│   │   ├── opencode-client.ts # OpenCode API client
+│   │   └── i18n.tsx          # Internationalization provider
+│   ├── locales/              # Translation files
+│   │   ├── en.ts             # English translations
+│   │   └── zh-CN.ts          # Simplified Chinese translations
 │   ├── stores/               # State management (SolidJS stores)
 │   │   ├── session.ts        # Session state
-│   │   └── message.ts        # Message state
+│   │   ├── message.ts        # Message state
+│   │   └── config.ts         # Configuration state
 │   ├── types/                # TypeScript type definitions
 │   │   └── opencode.ts       # OpenCode API types
 │   ├── App.tsx               # Root component with routing
@@ -175,8 +185,23 @@ Uses SolidJS reactive stores:
 | **Markdown**          | Marked          | ^15.0.4  |
 | **Date/Time**         | Luxon           | ^3.5.0   |
 | **Diff**              | diff            | ^7.0.0   |
+| **i18n**              | @solid-primitives/i18n | ^2.2.1   |
 
 ## Configuration
+
+### Language / 语言
+
+OpenCode Remote supports English and Simplified Chinese. The application automatically detects your browser language. You can manually switch languages using the language selector in the top-right corner of any page.
+
+OpenCode Remote 支持英文和简体中文。应用会自动检测您的浏览器语言。您也可以在任何页面右上角使用语言选择器手动切换语言。
+
+**Available Languages / 可用语言:**
+- English (en)
+- 简体中文 (zh-CN)
+
+The language preference is saved in `localStorage` and persists across sessions.
+
+语言偏好保存在 `localStorage` 中，并在会话之间保持不变。
 
 ### Port Configuration
 

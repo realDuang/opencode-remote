@@ -45,6 +45,7 @@ import { formatDuration } from "./common";
 import { ContentMarkdown } from "./content-markdown";
 import type { MessageV2 } from "../../types/opencode";
 import type { Diagnostic } from "vscode-languageserver-types";
+import { useI18n, formatMessage } from "../../lib/i18n";
 
 import styles from "./part.module.css";
 
@@ -58,6 +59,7 @@ export interface PartProps {
 }
 
 export function Part(props: PartProps) {
+  const { t } = useI18n();
   const [copied, setCopied] = createSignal(false);
   const id = createMemo(() => props.message.id + "-" + props.index);
 
@@ -71,7 +73,7 @@ export function Part(props: PartProps) {
       data-copied={copied() ? true : undefined}
     >
       <div data-component="decoration">
-        <div data-slot="anchor" title="Link to this message">
+        <div data-slot="anchor" title={t().parts.linkToMessage}>
           <a
             href={`#${id()}`}
             onClick={(e) => {
@@ -187,7 +189,7 @@ export function Part(props: PartProps) {
             <IconHashtag width={18} height={18} />
             <IconCheckCircle width={18} height={18} />
           </a>
-          <span data-slot="tooltip">Copied!</span>
+          <span data-slot="tooltip">{t().common.copied}</span>
         </div>
         <div data-slot="bar"></div>
       </div>
@@ -220,13 +222,13 @@ export function Part(props: PartProps) {
         {props.message.role === "assistant" && props.part.type === "reasoning" && (
           <div data-component="tool">
             <div data-component="tool-title">
-              <span data-slot="name">Thinking</span>
+              <span data-slot="name">{t().parts.thinking}</span>
             </div>
             <Show when={props.part.text}>
               <div data-component="assistant-reasoning">
-                <ResultsButton showCopy="Show details" hideCopy="Hide details">
+                <ResultsButton showCopy={t().common.showDetails} hideCopy={t().common.hideDetails}>
                   <div data-component="assistant-reasoning-markdown">
-                    <ContentMarkdown expand text={props.part.text || "Thinking..."} />
+                    <ContentMarkdown expand text={props.part.text || t().parts.thinking + "..."} />
                   </div>
                 </ResultsButton>
               </div>
@@ -236,7 +238,7 @@ export function Part(props: PartProps) {
 
         {props.message.role === "user" && props.part.type === "file" && (
           <div data-component="attachment">
-            <div data-slot="copy">Attachment</div>
+            <div data-slot="copy">{t().parts.attachment}</div>
             <div data-slot="filename">{props.part.filename}</div>
           </div>
         )}
@@ -459,6 +461,7 @@ function getDiagnostics(
 }
 
 function formatErrorString(error: string): JSX.Element {
+  const { t } = useI18n();
   if (!error) return <></>;
   const errorMarker = "Error: ";
   const startsWithError = error.startsWith(errorMarker);
@@ -466,7 +469,7 @@ function formatErrorString(error: string): JSX.Element {
   return startsWithError ? (
     <pre>
       <span data-color="red" data-marker="label" data-separator>
-        Error
+        {t().common.error}
       </span>
       <span>{error.slice(errorMarker.length)}</span>
     </pre>
@@ -478,6 +481,7 @@ function formatErrorString(error: string): JSX.Element {
 }
 
 export function TodoWriteTool(props: ToolProps) {
+  const { t } = useI18n();
   const priority: Record<Todo["status"], number> = {
     in_progress: 0,
     pending: 1,
@@ -495,9 +499,9 @@ export function TodoWriteTool(props: ToolProps) {
     <>
       <div data-component="tool-title">
         <span data-slot="name">
-          <Switch fallback="Updating plan">
-            <Match when={starting()}>Creating plan</Match>
-            <Match when={finished()}>Completing plan</Match>
+          <Switch fallback={t().parts.updatingPlan}>
+            <Match when={starting()}>{t().parts.creatingPlan}</Match>
+            <Match when={finished()}>{t().parts.completingPlan}</Match>
           </Switch>
         </span>
       </div>
@@ -518,6 +522,7 @@ export function TodoWriteTool(props: ToolProps) {
 }
 
 export function GrepTool(props: ToolProps) {
+  const { t } = useI18n();
   return (
     <>
       <div data-component="tool-title">
@@ -536,8 +541,12 @@ export function GrepTool(props: ToolProps) {
             <ResultsButton
               showCopy={
                 props.state.metadata?.matches === 1
-                  ? "1 match"
-                  : `${props.state.metadata?.matches} matches`
+                  ? formatMessage(t().parts.match, {
+                      count: props.state.metadata?.matches,
+                    })
+                  : formatMessage(t().parts.matches, {
+                      count: props.state.metadata?.matches,
+                    })
               }
             >
               <ContentText expand compact text={props.state.output} />
@@ -613,6 +622,7 @@ export function WebFetchTool(props: ToolProps) {
 }
 
 export function ReadTool(props: ToolProps) {
+  const { t } = useI18n();
   const filePath = createMemo(() =>
     stripWorkingDirectory(props.state.input?.filePath, props.message.path?.cwd),
   );
@@ -631,7 +641,7 @@ export function ReadTool(props: ToolProps) {
             <ContentError>{formatErrorString(props.state.output)}</ContentError>
           </Match>
           <Match when={typeof props.state.metadata?.preview === "string"}>
-            <ResultsButton showCopy="Show preview" hideCopy="Hide preview">
+            <ResultsButton showCopy={t().common.showPreview} hideCopy={t().common.hidePreview}>
               <ContentCode
                 lang={getShikiLang(filePath() || "")}
                 code={props.state.metadata?.preview}
@@ -655,6 +665,7 @@ export function ReadTool(props: ToolProps) {
 }
 
 export function WriteTool(props: ToolProps) {
+  const { t } = useI18n();
   const filePath = createMemo(() =>
     stripWorkingDirectory(props.state.input?.filePath, props.message.path?.cwd),
   );
@@ -682,7 +693,7 @@ export function WriteTool(props: ToolProps) {
             <ContentError>{formatErrorString(props.state.output)}</ContentError>
           </Match>
           <Match when={props.state.input?.content}>
-            <ResultsButton showCopy="Show contents" hideCopy="Hide contents">
+            <ResultsButton showCopy={t().common.showContents} hideCopy={t().common.hideContents}>
               <ContentCode
                 lang={getShikiLang(filePath() || "")}
                 code={props.state.input?.content}
@@ -749,6 +760,7 @@ export function BashTool(props: ToolProps) {
 }
 
 export function GlobTool(props: ToolProps) {
+  const { t } = useI18n();
   return (
     <>
       <div data-component="tool-title">
@@ -765,8 +777,12 @@ export function GlobTool(props: ToolProps) {
             <ResultsButton
               showCopy={
                 props.state.metadata?.count === 1
-                  ? "1 result"
-                  : `${props.state.metadata?.count} results`
+                  ? formatMessage(t().parts.result, {
+                      count: props.state.metadata?.count,
+                    })
+                  : formatMessage(t().parts.results, {
+                      count: props.state.metadata?.count,
+                    })
               }
             >
               <ContentText expand compact text={props.state.output} />
@@ -791,6 +807,7 @@ interface ResultsButtonProps extends ParentProps {
   hideCopy?: string;
 }
 function ResultsButton(props: ResultsButtonProps) {
+  const { t } = useI18n();
   const [show, setShow] = createSignal(false);
 
   return (
@@ -803,8 +820,8 @@ function ResultsButton(props: ResultsButtonProps) {
       >
         <span>
           {show()
-            ? props.hideCopy || "Hide results"
-            : props.showCopy || "Show results"}
+            ? props.hideCopy || t().common.hideResults
+            : props.showCopy || t().common.showResults}
         </span>
         <span data-slot="icon">
           <Show
@@ -841,6 +858,7 @@ function ToolFooter(props: { time: number }) {
 }
 
 function TaskTool(props: ToolProps) {
+  const { t } = useI18n();
   return (
     <>
       <div data-component="tool-title">
@@ -850,7 +868,7 @@ function TaskTool(props: ToolProps) {
       <div data-component="tool-input">
         &ldquo;{props.state.input.prompt}&rdquo;
       </div>
-      <ResultsButton showCopy="Show output" hideCopy="Hide output">
+      <ResultsButton showCopy={t().common.showOutput} hideCopy={t().common.hideOutput}>
         <div data-component="tool-output">
           <ContentMarkdown expand text={props.state.output} />
         </div>

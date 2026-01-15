@@ -1,5 +1,6 @@
 import { createSignal, createEffect, Show, Switch, Match } from "solid-js";
 import { useNavigate } from "@solidjs/router";
+import { useI18n } from "../lib/i18n";
 
 interface TunnelInfo {
   url: string;
@@ -10,6 +11,7 @@ interface TunnelInfo {
 
 export default function RemoteAccess() {
   const navigate = useNavigate();
+  const { t } = useI18n();
   const [tunnelEnabled, setTunnelEnabled] = createSignal(false);
   const [tunnelInfo, setTunnelInfo] = createSignal<TunnelInfo>({
     url: "",
@@ -24,9 +26,9 @@ export default function RemoteAccess() {
   const [showPassword, setShowPassword] = createSignal(false);
   const [activeQrTab, setActiveQrTab] = createSignal<"lan" | "public">("lan");
 
-  // 加载系统信息
+  // Load system info
   createEffect(() => {
-    // 获取系统信息
+    // Get system info
     fetch("/api/system/info")
       .then((res) => res.json())
       .then((data) => {
@@ -35,7 +37,7 @@ export default function RemoteAccess() {
       })
       .catch(console.error);
 
-    // 获取访问密码
+    // Get access code
     fetch("/api/auth/code")
       .then((res) => res.json())
       .then((data) => {
@@ -43,11 +45,11 @@ export default function RemoteAccess() {
       })
       .catch(console.error);
 
-    // 获取tunnel状态
+    // Get tunnel status
     checkTunnelStatus();
   });
 
-  // 当隧道状态改变时，自动切换QR码显示
+  // Automatically switch QR tab when tunnel status changes
   createEffect(() => {
     if (tunnelInfo().status === "running") {
       setActiveQrTab("public");
@@ -83,21 +85,21 @@ export default function RemoteAccess() {
       setTunnelInfo(info);
       setTunnelEnabled(true);
 
-      // 如果状态是 starting，开始轮询直到获取到 URL
+      // Start polling if status is starting
       if (info.status === "starting") {
         const pollInterval = setInterval(async () => {
           const statusRes = await fetch("/api/tunnel/status");
           const statusInfo = await statusRes.json();
           setTunnelInfo(statusInfo);
 
-          // 如果获取到 URL 或出错，停止轮询
+          // Stop polling if running or error
           if (statusInfo.status === "running" || statusInfo.status === "error") {
             clearInterval(pollInterval);
             setLoading(false);
           }
-        }, 1000); // 每秒检查一次
+        }, 1000); // Check every second
 
-        // 30秒后超时
+        // Timeout after 30 seconds
         setTimeout(() => {
           clearInterval(pollInterval);
           setLoading(false);
@@ -110,7 +112,7 @@ export default function RemoteAccess() {
       setTunnelInfo({
         url: "",
         status: "error",
-        error: "启动失败，请确保已安装cloudflared",
+        error: t().remote.startFailed,
       });
       setLoading(false);
     }
@@ -158,7 +160,7 @@ export default function RemoteAccess() {
               <path d="m15 18-6-6 6-6"/>
             </svg>
           </button>
-          <h1 class="font-semibold text-lg">远程访问</h1>
+          <h1 class="font-semibold text-lg">{t().remote.title}</h1>
         </div>
         <div class="text-xs font-medium px-2 py-1 rounded bg-gray-100 dark:bg-zinc-800 text-gray-500 dark:text-gray-400">
           OpenCode Remote
@@ -174,7 +176,7 @@ export default function RemoteAccess() {
             <div class="p-5 flex items-center justify-between">
               <div class="space-y-1">
                 <div class="flex items-center gap-2">
-                  <h2 class="font-semibold text-base">公网远程访问</h2>
+                  <h2 class="font-semibold text-base">{t().remote.publicAccess}</h2>
                   <Show when={loading() || tunnelInfo().status === "starting"}>
                     <span class="inline-flex h-2 w-2 rounded-full bg-yellow-400 animate-pulse"></span>
                   </Show>
@@ -183,7 +185,7 @@ export default function RemoteAccess() {
                   </Show>
                 </div>
                 <p class="text-sm text-gray-500 dark:text-gray-400">
-                  通过 Cloudflare 隧道从互联网访问
+                  {t().remote.publicAccessDesc}
                 </p>
               </div>
               
@@ -216,7 +218,7 @@ export default function RemoteAccess() {
                <div class="px-5 py-3 bg-blue-50 dark:bg-blue-900/10 border-t border-blue-100 dark:border-blue-900/30">
                 <p class="text-xs text-blue-600 dark:text-blue-400 flex items-center gap-2">
                   <svg class="animate-spin" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
-                  正在启动隧道，请稍候...
+                  {t().remote.starting}
                 </p>
               </div>
             </Show>
@@ -226,7 +228,7 @@ export default function RemoteAccess() {
           <div class="rounded-xl bg-orange-50 dark:bg-orange-900/10 border border-orange-100 dark:border-orange-900/30 p-4 flex gap-3">
              <svg xmlns="http://www.w3.org/2000/svg" class="shrink-0 text-orange-600 dark:text-orange-400 mt-0.5" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" x2="12" y1="9" y2="13"/><line x1="12" x2="12.01" y1="17" y2="17"/></svg>
              <div class="text-sm text-orange-800 dark:text-orange-200">
-               <span class="font-medium">安全提示：</span> 远程访问允许完全控制此设备。请妥善保管访问密码，切勿分享给不信任的人。
+               <span class="font-medium">{t().remote.securityWarning}</span> {t().remote.securityWarningDesc}
              </div>
           </div>
 
@@ -238,7 +240,7 @@ export default function RemoteAccess() {
               <div class="bg-white dark:bg-zinc-900 rounded-xl border border-gray-200 dark:border-zinc-800 shadow-sm p-5">
                 <h3 class="text-sm font-medium text-gray-500 dark:text-gray-400 mb-3 flex items-center gap-2">
                   <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-                  访问密码
+                  {t().remote.accessPassword}
                 </h3>
                 <div class="flex items-center justify-between bg-gray-50 dark:bg-zinc-950 rounded-lg border border-gray-200 dark:border-zinc-800 px-4 py-3">
                   <span class="font-mono text-xl font-bold tracking-widest text-gray-900 dark:text-white">
@@ -270,7 +272,7 @@ export default function RemoteAccess() {
               {/* Connection Addresses */}
               <div class="bg-white dark:bg-zinc-900 rounded-xl border border-gray-200 dark:border-zinc-800 shadow-sm overflow-hidden">
                 <div class="p-4 border-b border-gray-100 dark:border-zinc-800/50">
-                  <h3 class="text-sm font-medium text-gray-500 dark:text-gray-400">连接地址</h3>
+                  <h3 class="text-sm font-medium text-gray-500 dark:text-gray-400">{t().remote.connectionAddress}</h3>
                 </div>
                 <div class="divide-y divide-gray-100 dark:divide-zinc-800/50">
                   
@@ -282,7 +284,7 @@ export default function RemoteAccess() {
                            <span class="inline-flex items-center justify-center w-5 h-5 rounded bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400">
                              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>
                            </span>
-                           <span class="text-xs font-medium text-gray-500">公网地址</span>
+                           <span class="text-xs font-medium text-gray-500">{t().remote.publicAddress}</span>
                         </div>
                         <p class="font-mono text-sm text-green-700 dark:text-green-400 truncate select-all">{tunnelInfo().url}</p>
                       </div>
@@ -302,7 +304,7 @@ export default function RemoteAccess() {
                           <span class="inline-flex items-center justify-center w-5 h-5 rounded bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400">
                             <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" x2="12.01" y1="20" y2="20"/></svg>
                           </span>
-                          <span class="text-xs font-medium text-gray-500">局域网地址</span>
+                          <span class="text-xs font-medium text-gray-500">{t().remote.lanAddress}</span>
                       </div>
                       <p class="font-mono text-sm text-gray-700 dark:text-gray-300 truncate select-all">{getLanUrl()}</p>
                     </div>
@@ -321,7 +323,7 @@ export default function RemoteAccess() {
                           <span class="inline-flex items-center justify-center w-5 h-5 rounded bg-gray-100 dark:bg-zinc-800 text-gray-600 dark:text-gray-400">
                              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" x2="16" y1="21" y2="21"/><line x1="12" x2="12" y1="17" y2="21"/></svg>
                           </span>
-                          <span class="text-xs font-medium text-gray-500">本机地址</span>
+                          <span class="text-xs font-medium text-gray-500">{t().remote.localAddress}</span>
                       </div>
                       <p class="font-mono text-sm text-gray-700 dark:text-gray-300 truncate select-all">{getLocalUrl()}</p>
                     </div>
@@ -345,14 +347,14 @@ export default function RemoteAccess() {
                       onClick={() => setActiveQrTab("lan")}
                       class={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${activeQrTab() === "lan" ? 'bg-white dark:bg-zinc-700 shadow-sm text-gray-900 dark:text-white' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}`}
                     >
-                      局域网
+                      {t().remote.lan}
                     </button>
                     <button
                       disabled={tunnelInfo().status !== "running"}
                       onClick={() => setActiveQrTab("public")}
                       class={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${activeQrTab() === "public" ? 'bg-white dark:bg-zinc-700 shadow-sm text-green-700 dark:text-green-400' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'} ${tunnelInfo().status !== "running" ? 'opacity-50 cursor-not-allowed' : ''}`}
                     >
-                      公网
+                      {t().remote.public}
                     </button>
                  </div>
               </div>
@@ -368,7 +370,7 @@ export default function RemoteAccess() {
                    </Match>
                    <Match when={activeQrTab() === "public"}>
                       <div class="w-48 h-48 flex items-center justify-center bg-gray-50 text-gray-400 text-sm">
-                         未连接
+                         {t().remote.notConnected}
                       </div>
                    </Match>
                    <Match when={activeQrTab() === "lan"}>
@@ -383,10 +385,10 @@ export default function RemoteAccess() {
 
               <div class="mt-6 text-center space-y-2">
                  <h4 class="font-medium text-gray-900 dark:text-white">
-                    {activeQrTab() === "public" ? "公网扫码访问" : "局域网扫码访问"}
+                    {activeQrTab() === "public" ? t().remote.publicQrScan : t().remote.lanQrScan}
                  </h4>
                  <p class="text-xs text-gray-500 dark:text-gray-400 max-w-[200px]">
-                    {activeQrTab() === "public" ? "适用于远程连接，速度可能较慢" : "确保手机和电脑连接同一 Wi-Fi"}
+                    {activeQrTab() === "public" ? t().remote.publicQrDesc : t().remote.lanQrDesc}
                  </p>
               </div>
             </div>

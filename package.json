@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@shikijs/transformers": "^1.22.0",
+    "@solid-primitives/i18n": "^2.2.1",
     "@solidjs/router": "^0.14.10",
     "clsx": "^2.1.0",
     "diff": "^5.1.0",

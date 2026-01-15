@@ -18,9 +18,12 @@ import { MessageList } from "../components/MessageList";
 import { PromptInput } from "../components/PromptInput";
 import { SessionSidebar } from "../components/SessionSidebar";
 import { ModelSelector } from "../components/ModelSelector";
+import { LanguageSwitcher } from "../components/LanguageSwitcher";
 import { MessageV2 } from "../types/opencode";
+import { useI18n } from "../lib/i18n";
 
 export default function Chat() {
+  const { t } = useI18n();
   const navigate = useNavigate();
   const [sending, setSending] = createSignal(false);
   const [messagesRef, setMessagesRef] = createSignal<HTMLDivElement>();
@@ -68,7 +71,7 @@ export default function Chat() {
     onCleanup(() => window.removeEventListener('resize', handleResize));
   });
 
-  // 加载指定会话的消息
+  // Load messages for specific session
   const loadSessionMessages = async (sessionId: string) => {
     console.log("[LoadMessages] Loading messages for session:", sessionId);
     setLoadingMessages(true);
@@ -76,25 +79,25 @@ export default function Chat() {
     const messages = await client.getMessages(sessionId);
     console.log("[LoadMessages] Loaded messages:", messages);
 
-    // 按照 opencode desktop 的方式：分别存储 message info 和 parts
+    // Follow opencode desktop pattern: store message info and parts separately
     const messageInfos: MessageV2.Info[] = [];
 
     for (const msg of messages) {
-      // API 返回的格式是 { info: {...}, parts: [...] }
+      // API returns format { info: {...}, parts: [...] }
       const msgInfo = (msg as any).info || msg;
       const msgParts = (msg as any).parts || [];
 
-      // 存储 message info（不包含 parts）
+      // Store message info (without parts)
       messageInfos.push(msgInfo);
 
-      // 单独存储 parts，按 id 排序
+      // Store parts separately, sorted by id
       const sortedParts = msgParts.slice().sort((a: any, b: any) =>
         a.id.localeCompare(b.id)
       );
       setMessageStore("part", msgInfo.id, sortedParts);
     }
 
-    // 存储所有 messages，按 id 排序
+    // Store all messages, sorted by id
     const sortedMessages = messageInfos.slice().sort((a, b) =>
       a.id.localeCompare(b.id)
     );
@@ -111,10 +114,10 @@ export default function Chat() {
     const sessions = await client.listSessions();
     console.log("[Init] Loaded sessions:", sessions);
 
-    // 处理会话列表，将时间戳转换为 ISO 字符串
+    // Process session list, convert timestamps to ISO strings
     const processedSessions = sessions.map((s) => ({
       id: s.id,
-      title: s.title || "新会话",
+      title: s.title || t().sidebar.newSession,
       directory: s.directory || "",
       parentID: s.parentID,
       createdAt: new Date(s.time.created).toISOString(),
@@ -125,10 +128,10 @@ export default function Chat() {
     let currentSession = processedSessions[0];
     if (!currentSession) {
       console.log("[Init] No sessions found, creating new one");
-      const newSession = await client.createSession("新会话");
+      const newSession = await client.createSession(t().sidebar.newSession);
       currentSession = {
         id: newSession.id,
-        title: newSession.title || "新会话",
+        title: newSession.title || t().sidebar.newSession,
         directory: newSession.directory || "",
         parentID: newSession.parentID,
         createdAt: new Date(newSession.time.created).toISOString(),
@@ -147,7 +150,7 @@ export default function Chat() {
     await loadSessionMessages(currentSession.id);
   };
 
-  // 切换会话
+  // Switch session
   const handleSelectSession = async (sessionId: string) => {
     console.log("[SelectSession] Switching to session:", sessionId);
     setSessionStore("current", sessionId);
@@ -155,7 +158,7 @@ export default function Chat() {
       setIsSidebarOpen(false); // Close sidebar on mobile selection
     }
 
-    // 如果该会话的消息还没加载过，则加载
+    // If messages for this session are not loaded yet, load them
     if (!messageStore.message[sessionId]) {
       await loadSessionMessages(sessionId);
     } else {
@@ -163,15 +166,15 @@ export default function Chat() {
     }
   };
 
-  // 新建会话
+  // New session
   const handleNewSession = async () => {
     console.log("[NewSession] Creating new session");
-    const newSession = await client.createSession("新会话");
+    const newSession = await client.createSession(t().sidebar.newSession);
     console.log("[NewSession] Created:", newSession);
 
     const processedSession = {
       id: newSession.id,
-      title: newSession.title || "新会话",
+      title: newSession.title || t().sidebar.newSession,
       directory: newSession.directory || "",
       parentID: newSession.parentID,
       createdAt: new Date(newSession.time.created).toISOString(),
@@ -185,27 +188,27 @@ export default function Chat() {
       setIsSidebarOpen(false); // Close sidebar on mobile
     }
 
-    // 初始化空消息数组
+    // Initialize empty messages array
     setMessageStore("message", processedSession.id, []);
     setTimeout(scrollToBottom, 100);
   };
 
-  // 删除会话
+  // Delete session
   const handleDeleteSession = async (sessionId: string) => {
     console.log("[DeleteSession] Deleting session:", sessionId);
 
     await client.deleteSession(sessionId);
 
-    // 从列表中移除
+    // Remove from list
     setSessionStore("list", (list) => list.filter((s) => s.id !== sessionId));
 
-    // 如果删除的是当前会话，切换到第一个会话
+    // If current session deleted, switch to first available session
     if (sessionStore.current === sessionId) {
       const remaining = sessionStore.list.filter((s) => s.id !== sessionId);
       if (remaining.length > 0) {
         await handleSelectSession(remaining[0].id);
       } else {
-        // 没有会话了，创建一个新的
+        // No sessions left, create a new one
         await handleNewSession();
       }
     }
@@ -217,23 +220,23 @@ export default function Chat() {
     const sessionId = sessionStore.current;
     if (!sessionId) return;
 
-    // 按照 opencode desktop 的实现处理事件
+    // Handle events following opencode desktop implementation
     if (event.type === "message.part.updated") {
       const part = event.data as MessageV2.Part;
       const messageId = part.messageID;
 
-      // 获取或初始化 parts 数组
+      // Get or initialize parts array
       const parts = messageStore.part[messageId] || [];
 
-      // 使用二分查找找到插入/更新位置（保持按 id 排序）
+      // Use binary search to find insertion/update position (keep sorted by id)
       const index = binarySearch(parts, part.id, (p) => p.id);
 
       if (index.found) {
-        // 更新现有 part
+        // Update existing part
         setMessageStore("part", messageId, index.index, part);
       } else {
-        // 插入新 part（保持排序）
-        // 如果该 messageId 的 parts 数组不存在，先初始化
+        // Insert new part (keep sorted)
+        // If parts array doesn't exist for this messageId, initialize it
         if (!messageStore.part[messageId]) {
           setMessageStore("part", messageId, [part]);
         } else {
@@ -251,18 +254,18 @@ export default function Chat() {
     if (event.type === "message.updated") {
       const msgInfo = event.data as MessageV2.Info;
 
-      // 获取或初始化 messages 数组
+      // Get or initialize messages array
       const messages = messageStore.message[sessionId] || [];
 
-      // 使用二分查找找到插入/更新位置
+      // Use binary search to find insertion/update position
       const index = binarySearch(messages, msgInfo.id, (m) => m.id);
 
       if (index.found) {
-        // 更新现有 message
+        // Update existing message
         setMessageStore("message", sessionId, index.index, msgInfo);
       } else {
-        // 插入新 message（保持排序）
-        // 如果该 sessionId 的 messages 数组不存在，先初始化
+        // Insert new message (keep sorted)
+        // If messages array doesn't exist for this sessionId, initialize it
         if (!messageStore.message[sessionId]) {
           setMessageStore("message", sessionId, [msgInfo]);
         } else {
@@ -283,7 +286,7 @@ export default function Chat() {
             ? {
               ...s,
               id: updated.id,
-              title: updated.title || "新会话",
+              title: updated.title || t().sidebar.newSession,
               directory: updated.directory || s.directory || "",
               createdAt: new Date(updated.time.created).toISOString(),
               updatedAt: new Date(updated.time.updated).toISOString(),
@@ -294,7 +297,7 @@ export default function Chat() {
     }
   };
 
-  // 二分查找辅助函数（与 opencode desktop 一致）
+  // Binary search helper (consistent with opencode desktop)
   function binarySearch<T>(
     arr: T[],
     target: string,
@@ -335,7 +338,7 @@ export default function Chat() {
       time: {
         created: Date.now(),
       },
-      parts: [],  // Info 不包含 parts
+      parts: [],  // Info doesn't include parts
     };
 
     const tempPart: MessageV2.Part = {
@@ -346,10 +349,10 @@ export default function Chat() {
       text,
     };
 
-    // 按照 opencode desktop 的方式存储
+    // Store following opencode desktop pattern
     const messages = messageStore.message[sessionId] || [];
 
-    // 插入消息（保持排序）
+    // Insert message (keep sorted)
     const msgIndex = binarySearch(messages, tempMessageId, (m) => m.id);
     if (!msgIndex.found) {
       setMessageStore("message", sessionId, (draft) => {
@@ -359,7 +362,7 @@ export default function Chat() {
       });
     }
 
-    // 插入 part
+    // Insert part
     setMessageStore("part", tempMessageId, [tempPart]);
     setTimeout(scrollToBottom, 0);
 
@@ -416,21 +419,21 @@ export default function Chat() {
             class="w-full flex items-center gap-3 px-3 py-2 text-sm font-medium text-gray-600 dark:text-gray-400 hover:bg-white dark:hover:bg-zinc-800 hover:text-gray-900 dark:hover:text-white rounded-lg transition-all shadow-sm hover:shadow"
           >
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="3" rx="2" /><line x1="8" x2="16" y1="21" y2="21" /><line x1="12" x2="12" y1="17" y2="21" /></svg>
-            远程访问
+            {t().chat.remoteAccess}
           </button>
           <button
             onClick={() => navigate("/settings")}
             class="w-full flex items-center gap-3 px-3 py-2 text-sm font-medium text-gray-600 dark:text-gray-400 hover:bg-white dark:hover:bg-zinc-800 hover:text-gray-900 dark:hover:text-white rounded-lg transition-all shadow-sm hover:shadow"
           >
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.09a2 2 0 0 1-1-1.74v-.51a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" /><circle cx="12" cy="12" r="3" /></svg>
-            设置
+            {t().chat.settings}
           </button>
           <button
             onClick={handleLogout}
             class="w-full flex items-center gap-3 px-3 py-2 text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
           >
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><polyline points="16 17 21 12 16 7" /><line x1="21" x2="9" y1="12" y2="12" /></svg>
-            退出登录
+            {t().chat.logout}
           </button>
         </div>
       </aside>
@@ -452,6 +455,7 @@ export default function Chat() {
             </h1>
           </div>
           <div class="flex items-center gap-2">
+            <LanguageSwitcher />
             <ModelSelector onModelChange={handleModelChange} />
           </div>
         </header>
@@ -488,10 +492,10 @@ export default function Chat() {
                           <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 9a2 2 0 0 1-2 2H6l-4 4V4c0-1.1.9-2 2-2h8a2 2 0 0 1 2 2v5Z" /><path d="M18 9h2a2 2 0 0 1 2 2v11l-4-4h-6a2 2 0 0 1-2-2v-1" /></svg>
                         </div>
                         <h2 class="text-xl font-semibold text-gray-900 dark:text-white mb-2">
-                          开始新的对话
+                          {t().chat.startConversation}
                         </h2>
                         <p class="text-sm text-gray-500 dark:text-gray-400 max-w-xs mx-auto">
-                          选择一个模型，在下方输入框中输入任何问题开始聊天。
+                          {t().chat.startConversationDesc}
                         </p>
                       </div>
                     }
@@ -507,7 +511,7 @@ export default function Chat() {
                   <PromptInput onSend={handleSendMessage} disabled={sending()} />
                   <div class="mt-2 text-center">
                     <p class="text-[10px] text-gray-400 dark:text-gray-600">
-                      AI 生成的内容可能不准确，请核实重要信息。
+                      {t().chat.disclaimer}
                     </p>
                   </div>
                 </div>

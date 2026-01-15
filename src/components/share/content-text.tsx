@@ -2,6 +2,7 @@ import style from "./content-text.module.css"
 import { createSignal } from "solid-js"
 import { createOverflow } from "./common"
 import { CopyButton } from "./copy-button"
+import { useI18n } from "../../lib/i18n"
 
 interface Props {
   text: string
@@ -9,6 +10,7 @@ interface Props {
   compact?: boolean
 }
 export function ContentText(props: Props) {
+  const { t } = useI18n()
   const [expanded, setExpanded] = createSignal(false)
   const overflow = createOverflow()
 
@@ -28,7 +30,7 @@ export function ContentText(props: Props) {
           data-slot="expand-button"
           onClick={() => setExpanded((e) => !e)}
         >
-          {expanded() ? "Show less" : "Show more"}
+          {expanded() ? t().common.showLess : t().common.showMore}
         </button>
       )}
       <CopyButton text={props.text} />

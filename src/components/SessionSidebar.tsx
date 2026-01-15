@@ -1,5 +1,6 @@
 import { For, Show, createSignal, createMemo } from "solid-js";
 import { SessionInfo, sessionStore, setSessionStore } from "../stores/session";
+import { useI18n, formatMessage } from "../lib/i18n";
 
 interface SessionSidebarProps {
   sessions: SessionInfo[];
@@ -9,7 +10,7 @@ interface SessionSidebarProps {
   onDeleteSession: (sessionId: string) => void;
 }
 
-// 项目分组数据结构
+// Project grouping data structure
 interface ProjectGroup {
   directory: string;
   name: string;
@@ -17,23 +18,24 @@ interface ProjectGroup {
 }
 
 export function SessionSidebar(props: SessionSidebarProps) {
+  const { t, locale } = useI18n();
   const [hoveredProject, setHoveredProject] = createSignal<string | null>(null);
 
-  // 获取项目名称（从路径中提取）
+  // Get project name from directory path
   const getProjectName = (directory: string): string => {
-    if (!directory) return "未知项目";
+    if (!directory) return t().common.unknownProject;
     const parts = directory.split("/").filter(Boolean);
-    return parts[parts.length - 1] || "未知项目";
+    return parts[parts.length - 1] || t().common.unknownProject;
   };
 
-  // 按项目分组会话
+  // Group sessions by project
   const projectGroups = createMemo((): ProjectGroup[] => {
     const groups: Map<string, SessionInfo[]> = new Map();
 
-    // 过滤掉子会话（只显示根会话）
+    // Filter out sub-sessions (show root sessions only)
     const rootSessions = props.sessions.filter((s) => !s.parentID);
 
-    // 按 directory 分组
+    // Group by directory
     for (const session of rootSessions) {
       const dir = session.directory || "";
       if (!groups.has(dir)) {
@@ -42,10 +44,10 @@ export function SessionSidebar(props: SessionSidebarProps) {
       groups.get(dir)!.push(session);
     }
 
-    // 转换为数组并按最新更新时间排序
+    // Convert to array and sort by latest updated time
     const result: ProjectGroup[] = [];
     for (const [directory, sessions] of groups) {
-      // 对每个项目内的会话按更新时间排序
+      // Sort sessions within each project by update time
       const sortedSessions = sessions.slice().sort((a, b) => {
         const aTime = new Date(a.updatedAt).getTime();
         const bTime = new Date(b.updatedAt).getTime();
@@ -59,7 +61,7 @@ export function SessionSidebar(props: SessionSidebarProps) {
       });
     }
 
-    // 按项目最新会话的更新时间排序
+    // Sort projects by their latest session's update time
     result.sort((a, b) => {
       const aLatest = a.sessions[0]
         ? new Date(a.sessions[0].updatedAt).getTime()
@@ -73,13 +75,13 @@ export function SessionSidebar(props: SessionSidebarProps) {
     return result;
   });
 
-  // 获取项目是否展开
+  // Check if project is expanded
   const isProjectExpanded = (directory: string): boolean => {
-    // 默认展开所有项目
+    // Expanded by default
     return sessionStore.projectExpanded[directory] !== false;
   };
 
-  // 切换项目展开/折叠状态
+  // Toggle project expansion
   const toggleProjectExpanded = (directory: string) => {
     const currentState = isProjectExpanded(directory);
     setSessionStore("projectExpanded", directory, !currentState);
@@ -93,30 +95,30 @@ export function SessionSidebar(props: SessionSidebarProps) {
     const diffHours = Math.floor(diffMs / 3600000);
     const diffDays = Math.floor(diffMs / 86400000);
 
-    if (diffMins < 1) return "刚刚";
-    if (diffMins < 60) return `${diffMins}分钟前`;
-    if (diffHours < 24) return `${diffHours}小时前`;
-    if (diffDays < 7) return `${diffDays}天前`;
+    if (diffMins < 1) return t().sidebar.justNow;
+    if (diffMins < 60) return formatMessage(t().sidebar.minutesAgo, { count: diffMins });
+    if (diffHours < 24) return formatMessage(t().sidebar.hoursAgo, { count: diffHours });
+    if (diffDays < 7) return formatMessage(t().sidebar.daysAgo, { count: diffDays });
 
-    return date.toLocaleDateString("zh-CN", {
+    return date.toLocaleDateString(locale() === "zh" ? "zh-CN" : "en-US", {
       month: "short",
       day: "numeric",
     });
   };
 
-  // 获取项目首字母或图标
+  // Get project initial or icon
   const getProjectInitial = (name: string): string => {
     if (!name) return "?";
-    // 如果是英文，取首字母
+    // For English, take first initial
     const firstChar = name.charAt(0);
     if (/[a-zA-Z]/.test(firstChar)) {
       return firstChar.toUpperCase();
     }
-    // 如果是中文或其他字符，直接取第一个字符
+    // For other characters, take the first one
     return firstChar;
   };
 
-  // 根据项目名生成颜色
+  // Generate color based on project name
   const getProjectColor = (name: string): string => {
     const colors = [
       "bg-blue-500",
@@ -137,7 +139,7 @@ export function SessionSidebar(props: SessionSidebarProps) {
 
   return (
     <div class="w-full bg-gray-50 dark:bg-zinc-950 border-r border-gray-200 dark:border-zinc-800 flex flex-col h-full">
-      {/* 会话列表 */}
+      {/* Session List */}
       <div class="flex-1 overflow-y-auto px-2 py-2">
         <Show
           when={projectGroups().length > 0}
@@ -158,7 +160,7 @@ export function SessionSidebar(props: SessionSidebarProps) {
                   <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
                 </svg>
               </div>
-              <p class="text-sm text-gray-500 dark:text-gray-400">暂无会话</p>
+              <p class="text-sm text-gray-500 dark:text-gray-400">{t().sidebar.noSessions}</p>
             </div>
           }
         >
@@ -169,7 +171,7 @@ export function SessionSidebar(props: SessionSidebarProps) {
 
               return (
                 <div class="mb-2">
-                  {/* 项目头部 */}
+                  {/* Project Header */}
                   <div
                     class="group flex items-center justify-between px-2 py-1.5 rounded-md cursor-pointer hover:bg-gray-100 dark:hover:bg-zinc-900 transition-colors"
                     onMouseEnter={() => setHoveredProject(project.directory)}
@@ -177,7 +179,7 @@ export function SessionSidebar(props: SessionSidebarProps) {
                     onClick={() => toggleProjectExpanded(project.directory)}
                   >
                     <div class="flex items-center gap-2 min-w-0 flex-1">
-                      {/* 展开/折叠箭头 */}
+                      {/* Expand/Collapse Arrow */}
                       <svg
                         xmlns="http://www.w3.org/2000/svg"
                         width="12"
@@ -195,20 +197,20 @@ export function SessionSidebar(props: SessionSidebarProps) {
                         <path d="m9 18 6-6-6-6" />
                       </svg>
 
-                      {/* 项目图标 */}
+                      {/* Project Icon */}
                       <div
                         class={`w-5 h-5 rounded flex items-center justify-center text-white text-xs font-medium flex-shrink-0 ${getProjectColor(project.name)}`}
                       >
                         {getProjectInitial(project.name)}
                       </div>
 
-                      {/* 项目名称 */}
+                      {/* Project Name */}
                       <span class="text-sm font-medium text-gray-700 dark:text-gray-300 truncate">
                         {project.name}
                       </span>
                     </div>
 
-                    {/* Hover 时显示新建会话按钮 */}
+                    {/* New session button on hover */}
                     <button
                       class={`p-1 text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 rounded transition-all ${
                         isHovered() ? "opacity-100" : "opacity-0"
@@ -217,7 +219,7 @@ export function SessionSidebar(props: SessionSidebarProps) {
                         e.stopPropagation();
                         props.onNewSession();
                       }}
-                      title="新建会话"
+                      title={t().sidebar.newSession}
                     >
                       <svg
                         xmlns="http://www.w3.org/2000/svg"
@@ -236,7 +238,7 @@ export function SessionSidebar(props: SessionSidebarProps) {
                     </button>
                   </div>
 
-                  {/* 会话列表（可折叠） */}
+                  {/* Session List (Collapsible) */}
                   <Show when={isExpanded()}>
                     <div class="ml-4 mt-1">
                       <For each={project.sessions}>
@@ -263,18 +265,18 @@ export function SessionSidebar(props: SessionSidebarProps) {
                                           : "text-gray-600 dark:text-gray-400"
                                       }`}
                                     >
-                                      {session.title || "新会话"}
+                                      {session.title || t().sidebar.newSession}
                                     </div>
                                     <span class="text-[10px] text-gray-400 dark:text-gray-500 flex-shrink-0">
                                       {formatDate(session.updatedAt)}
                                     </span>
                                   </div>
 
-                                  {/* 变更统计 */}
+                                  {/* Change Statistics */}
                                   <Show when={session.summary}>
                                     <div class="flex items-center gap-2 mt-0.5">
                                       <span class="text-[10px] text-gray-400">
-                                        {session.summary!.files} 文件
+                                        {formatMessage(t().sidebar.files, { count: session.summary!.files })}
                                       </span>
                                       <Show when={session.summary!.additions > 0}>
                                         <span class="text-[10px] text-green-500">
@@ -290,18 +292,18 @@ export function SessionSidebar(props: SessionSidebarProps) {
                                   </Show>
                                 </div>
 
-                                {/* 删除按钮 */}
+                                {/* Delete button */}
                                 <button
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     e.preventDefault();
-                                    const confirmed = window.confirm("确定要删除这个会话吗？");
+                                    const confirmed = window.confirm(t().sidebar.deleteConfirm);
                                     if (confirmed) {
                                       props.onDeleteSession(session.id);
                                     }
                                   }}
                                   class="flex-shrink-0 opacity-0 group-hover:opacity-100 p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-all"
-                                  title="删除会话"
+                                  title={t().sidebar.deleteSession}
                                 >
                                   <svg
                                     xmlns="http://www.w3.org/2000/svg"

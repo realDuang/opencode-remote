@@ -11,6 +11,7 @@
 - **Package Manager**: Bun
 - **Communication**: REST API + Server-Sent Events (SSE)
 - **Authentication**: 6-digit random code
+- **Internationalization**: @solid-primitives/i18n (English & Simplified Chinese)
 
 ### Project Structure
 
@@ -19,21 +20,30 @@ opencode-remote/
 ├── src/
 │   ├── pages/          # Page components
 │   │   ├── Login.tsx   # Login page (6-digit code)
-│   │   └── Chat.tsx    # Main chat interface
+│   │   ├── Chat.tsx    # Main chat interface
+│   │   ├── Settings.tsx        # Settings page
+│   │   └── RemoteAccess.tsx    # Remote access configuration
 │   ├── components/     # UI components
 │   │   ├── SessionSidebar.tsx  # Session list sidebar
 │   │   ├── MessageList.tsx     # Message list
 │   │   ├── PromptInput.tsx     # Input box
+│   │   ├── ModelSelector.tsx   # Model selection dropdown
+│   │   ├── LanguageSwitcher.tsx # Language switcher component
 │   │   └── share/              # Message rendering components ported from OpenCode
 │   │       ├── part.tsx        # Part component entry
 │   │       ├── content-*.tsx   # Renderers for different content types
 │   │       └── icons/          # Icon components
 │   ├── lib/            # Core libraries
 │   │   ├── auth.ts             # Authentication management (localStorage)
-│   │   └── opencode-client.ts  # OpenCode API client
+│   │   ├── opencode-client.ts  # OpenCode API client
+│   │   └── i18n.tsx            # i18n provider and utilities
+│   ├── locales/        # Translation files
+│   │   ├── en.ts               # English translations
+│   │   └── zh-CN.ts            # Simplified Chinese translations
 │   ├── stores/         # State management
 │   │   ├── session.ts  # Session state
-│   │   └── message.ts  # Message state
+│   │   ├── message.ts  # Message state
+│   │   └── config.ts   # Configuration state
 │   ├── types/          # TypeScript type definitions
 │   │   └── opencode.ts # OpenCode API types
 │   └── main.tsx        # Application entry
@@ -288,6 +298,198 @@ currentMessages() memo recomputes
 MessageList re-renders
    ↓
 UI updates
+```
+
+---
+
+## Internationalization (i18n)
+
+OpenCode Remote supports multiple languages using `@solid-primitives/i18n`.
+
+### Architecture
+
+#### Translation Files (`src/locales/`)
+
+- **`en.ts`**: English translations with `LocaleDict` interface definition
+- **`zh-CN.ts`**: Simplified Chinese translations implementing `LocaleDict`
+
+Translation structure:
+
+```typescript
+export interface LocaleDict {
+  common: {
+    loading: string;
+    cancel: string;
+    save: string;
+    // ...
+  };
+  login: { /* ... */ };
+  chat: { /* ... */ };
+  settings: { /* ... */ };
+  // ... more sections
+}
+```
+
+#### i18n Provider (`src/lib/i18n.tsx`)
+
+Core functionality:
+
+1. **`I18nProvider` Component**: Wraps the entire app (in `App.tsx`)
+2. **`useI18n()` Hook**: Returns `{ locale, setLocale, t }`
+3. **`formatMessage()` Helper**: String interpolation with variables
+4. **Auto-detection**: Detects browser language on first load
+5. **Persistence**: Saves language preference to `localStorage`
+
+### Usage in Components
+
+#### Basic Usage
+
+```typescript
+import { useI18n } from "../lib/i18n";
+
+function MyComponent() {
+  const { t, locale, setLocale } = useI18n();
+  
+  return (
+    <div>
+      <h1>{t().login.title}</h1>
+      <p>{t().chat.startConversation}</p>
+    </div>
+  );
+}
+```
+
+#### String Interpolation
+
+```typescript
+import { useI18n, formatMessage } from "../lib/i18n";
+
+function TimeDisplay() {
+  const { t } = useI18n();
+  const minutes = 5;
+  
+  // Translation: "minutesAgo": "{count} minutes ago"
+  return <span>{formatMessage(t().sidebar.minutesAgo, { count: minutes })}</span>;
+  // Output: "5 minutes ago" or "5 分钟前"
+}
+```
+
+#### Language Switcher
+
+The `LanguageSwitcher` component provides a dropdown for language selection:
+
+```typescript
+import { LanguageSwitcher } from "../components/LanguageSwitcher";
+
+// Use in any page/component
+<LanguageSwitcher />
+```
+
+### Adding a New Language
+
+1. **Create translation file** `src/locales/[locale-code].ts`:
+
+```typescript
+import type { LocaleDict } from "./en";
+
+export const translations: LocaleDict = {
+  common: {
+    loading: "Chargement...",
+    // ... translate all keys
+  },
+  // ... all sections must be translated
+};
+```
+
+2. **Update `i18n.tsx`**:
+
+```typescript
+import { translations as frTranslations } from "../locales/fr";
+
+const dictionaries = {
+  en: enTranslations,
+  "zh-CN": zhCNTranslations,
+  fr: frTranslations, // Add new language
+};
+
+export const localeNames: Record<LocaleCode, string> = {
+  en: "English",
+  "zh-CN": "简体中文",
+  fr: "Français", // Add display name
+};
+
+export type LocaleCode = "en" | "zh-CN" | "fr"; // Add to type
+```
+
+3. **Update `LanguageSwitcher.tsx`**:
+
+```typescript
+const locales: LocaleCode[] = ["en", "zh-CN", "fr"]; // Add new language
+```
+
+### Adding New Translation Keys
+
+1. **Add to `LocaleDict` interface** in `src/locales/en.ts`:
+
+```typescript
+export interface LocaleDict {
+  // ... existing sections
+  newSection: {
+    newKey: string;
+    anotherKey: string;
+  };
+}
+```
+
+2. **Add translations** in all language files (`en.ts`, `zh-CN.ts`, etc.):
+
+```typescript
+export const translations: LocaleDict = {
+  // ... existing translations
+  newSection: {
+    newKey: "English text",
+    anotherKey: "More English text",
+  },
+};
+```
+
+3. **Use in components**:
+
+```typescript
+const { t } = useI18n();
+return <p>{t().newSection.newKey}</p>;
+```
+
+### Best Practices
+
+1. **Never hardcode strings**: Always use `t()` for user-facing text
+2. **Keep translations in sync**: When adding keys, update all language files
+3. **Use meaningful keys**: Key names should indicate usage (e.g., `loginButton`, not `btn1`)
+4. **Organize by feature**: Group related translations under the same section
+5. **Use interpolation**: For dynamic text, use `formatMessage()` with variables
+6. **Test both languages**: Verify UI works correctly in all supported languages
+
+### Common Pitfalls
+
+❌ **Wrong**: Hardcoded strings
+```typescript
+<button>Save Changes</button>
+```
+
+✅ **Correct**: Using i18n
+```typescript
+const { t } = useI18n();
+<button>{t().settings.save}</button>
+```
+
+❌ **Wrong**: String concatenation
+```typescript
+<span>{count + " minutes ago"}</span>
+```
+
+✅ **Correct**: Using formatMessage
+```typescript
+<span>{formatMessage(t().sidebar.minutesAgo, { count })}</span>
 ```
 
 ---

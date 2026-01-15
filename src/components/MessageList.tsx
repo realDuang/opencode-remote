@@ -8,22 +8,22 @@ interface MessageListProps {
 }
 
 export function MessageList(props: MessageListProps) {
-  // 获取该会话的所有消息（已按 id 排序）
+  // Get all messages for this session (sorted by id)
   const messages = createMemo(() => messageStore.message[props.sessionID] || []);
 
   return (
     <div class="flex flex-col gap-6 py-4">
       <Index each={messages()}>
         {(message, msgIndex) => {
-          // 获取该消息的所有 parts（已按 id 排序）
+          // Get all parts for this message (sorted by id)
           const parts = createMemo(() => messageStore.part[message().id] || []);
 
-          // 过滤 parts（与 opencode desktop 一致）
+          // Filter parts (consistent with opencode desktop)
           const filteredParts = createMemo(() => {
             const allParts = parts();
 
             const filtered = allParts.filter((x, index) => {
-              // 过滤内部状态和不需要显示的 part
+              // Filter internal states and hidden parts
               if (x.type === "step-start" && index > 0) return false;
               if (x.type === "snapshot") return false;
               if (x.type === "patch") return false;
@@ -39,8 +39,8 @@ export function MessageList(props: MessageListProps) {
               return true;
             });
 
-            // 对 assistant 消息，重新排序：reasoning -> tools -> text
-            // 这样确保思考过程在前，最终答复在后
+            // For assistant messages, reorder: reasoning -> tools -> text
+            // This ensures thinking process comes first, final reply last
             if (message().role === "assistant") {
               const reasoning = filtered.filter((p) => p.type === "reasoning");
               const tools = filtered.filter((p) => p.type === "tool");
@@ -60,7 +60,7 @@ export function MessageList(props: MessageListProps) {
               <Suspense>
                 <Index each={filteredParts()}>
                   {(part, partIndex) => {
-                    // 判断是否是最后一条消息的最后一个 part
+                    // Check if it's the last part of the last message
                     const isLast = createMemo(
                       () =>
                         messages().length === msgIndex + 1 &&

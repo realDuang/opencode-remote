@@ -1,8 +1,10 @@
 import { createSignal, onMount, Show } from "solid-js";
 import { useNavigate } from "@solidjs/router";
 import { client } from "../lib/opencode-client";
+import { useI18n } from "../lib/i18n";
 
 export default function Settings() {
+  const { t } = useI18n();
   const navigate = useNavigate();
   const [serverUrl, setServerUrl] = createSignal("");
   const [saving, setSaving] = createSignal(false);
@@ -20,15 +22,9 @@ export default function Settings() {
   const checkConnection = async (url: string) => {
     setChecking(true);
     try {
-      // 尝试调用一个简单的 API 来验证连接
-      // 使用 listSessions 可能会因为鉴权问题失败，但至少说明连接通了
-      // 或者使用一个更基础的 endpoint 如果有的话。
-      // 这里我们暂时尝试请求 session 列表，如果返回 401/403 也说明服务是通的
-      // 或者直接用 fetch 探测
-      
       const testUrl = `${url}/session`; 
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 5000); // 5秒超时
+      const timeoutId = setTimeout(() => controller.abort(), 5000);
 
       try {
         const response = await fetch(testUrl, { 
@@ -39,10 +35,9 @@ export default function Settings() {
         clearTimeout(timeoutId);
 
         if (response.ok || response.status === 401 || response.status === 403) {
-            // 连接成功 (即使鉴权失败也算连接成功)
             return true;
         } else {
-            throw new Error(`服务器返回错误: ${response.status}`);
+            throw new Error(`${t().settings.serverError} ${response.status}`);
         }
       } catch (e: any) {
          clearTimeout(timeoutId);
@@ -51,7 +46,7 @@ export default function Settings() {
 
     } catch (error: any) {
       console.error("[Settings] Connection check failed:", error);
-      throw new Error(`无法连接到服务器: ${error.message}`);
+      throw new Error(`${t().settings.connectionFailed} ${error.message}`);
     } finally {
       setChecking(false);
     }
@@ -61,7 +56,7 @@ export default function Settings() {
       setSaveStatus(null);
       let url = serverUrl().trim();
       if (!url) {
-        setSaveStatus({ type: "error", message: "服务器地址不能为空" });
+        setSaveStatus({ type: "error", message: t().settings.serverUrlEmpty });
         return;
       }
       if (url.endsWith("/")) {
@@ -70,7 +65,7 @@ export default function Settings() {
       
       try {
           await checkConnection(url);
-          setSaveStatus({ type: "success", message: "连接测试成功！" });
+          setSaveStatus({ type: "success", message: t().settings.connectionSuccess });
       } catch (error: any) {
           setSaveStatus({ type: "error", message: error.message });
       }
@@ -84,25 +79,20 @@ export default function Settings() {
     try {
       let url = serverUrl().trim();
       
-      // Basic validation and formatting
       if (!url) {
-        throw new Error("服务器地址不能为空");
+        throw new Error(t().settings.serverUrlEmpty);
       }
       
-      // Remove trailing slash if present
       if (url.endsWith("/")) {
         url = url.slice(0, -1);
       }
 
-      // Test connection before saving
       await checkConnection(url);
 
-      // Save to client and localStorage
       client.setServerUrl(url);
 
-      setSaveStatus({ type: "success", message: "服务器地址已更新" });
+      setSaveStatus({ type: "success", message: t().settings.urlUpdated });
 
-      // Return to chat after a short delay
       setTimeout(() => {
         navigate("/chat");
       }, 1000);
@@ -110,7 +100,7 @@ export default function Settings() {
       console.error("[Settings] Failed to save config:", error);
       setSaveStatus({ 
         type: "error", 
-        message: error.message || "保存失败，请检查地址格式" 
+        message: error.message || t().settings.saveFailed 
       });
     } finally {
       setSaving(false);
@@ -131,10 +121,10 @@ export default function Settings() {
               onClick={handleCancel}
               class="text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white transition-colors"
             >
-              ← 返回
+              ← {t().settings.back}
             </button>
             <h1 class="text-xl font-bold text-gray-800 dark:text-white">
-              连接设置
+              {t().settings.title}
             </h1>
           </div>
         </header>
@@ -145,10 +135,10 @@ export default function Settings() {
             <div class="bg-white dark:bg-zinc-800 rounded-lg shadow-sm border dark:border-zinc-700 p-6 mb-6">
               <label class="block">
                 <span class="text-lg font-semibold text-gray-800 dark:text-white mb-2 block">
-                  OpenCode 服务器地址
+                  {t().settings.serverUrl}
                 </span>
                 <p class="text-sm text-gray-600 dark:text-gray-400 mb-4">
-                  请输入你要连接的 OpenCode 服务地址 (例如: http://localhost:4096)
+                  {t().settings.serverUrlDesc}
                 </p>
 
                 <div class="flex gap-2">
@@ -164,7 +154,7 @@ export default function Settings() {
                         disabled={checking() || saving() || !serverUrl()}
                         class="px-4 py-3 bg-gray-100 hover:bg-gray-200 dark:bg-zinc-700 dark:hover:bg-zinc-600 text-gray-700 dark:text-gray-200 border border-gray-300 dark:border-zinc-600 rounded-lg transition-colors disabled:opacity-50 whitespace-nowrap"
                     >
-                        {checking() ? "测试中..." : "测试连接"}
+                        {checking() ? t().settings.testing : t().settings.testConnection}
                     </button>
                 </div>
               </label>
@@ -190,26 +180,26 @@ export default function Settings() {
                 disabled={saving() || checking() || !serverUrl()}
                 class="flex-1 px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 dark:disabled:bg-zinc-700 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors"
               >
-                {saving() ? "保存中..." : "保存并连接"}
+                {saving() ? t().settings.saving : t().settings.saveAndConnect}
               </button>
               <button
                 onClick={handleCancel}
                 disabled={saving() || checking()}
                 class="px-6 py-3 bg-gray-200 hover:bg-gray-300 dark:bg-zinc-700 dark:hover:bg-zinc-600 text-gray-700 dark:text-gray-300 font-medium rounded-lg transition-colors disabled:opacity-50"
               >
-                取消
+                {t().common.cancel}
               </button>
             </div>
 
             {/* Info Box */}
             <div class="mt-6 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
               <h3 class="text-blue-800 dark:text-blue-200 font-semibold mb-2 text-sm">
-                💡 说明
+                💡 {t().settings.infoTitle}
               </h3>
               <ul class="text-blue-700 dark:text-blue-300 text-sm space-y-1">
-                <li>• 默认地址通常为 /opencode-api (指向本地代理)</li>
-                <li>• 如果连接远程服务器，请确保网络可达</li>
-                <li>• 更改地址后，聊天记录和会话列表将从新服务器加载</li>
+                <li>• {t().settings.infoDefault}</li>
+                <li>• {t().settings.infoRemote}</li>
+                <li>• {t().settings.infoChange}</li>
               </ul>
             </div>
           </div>

@@ -5,12 +5,14 @@ import { createOverflow } from "./common"
 import { CopyButton } from "./copy-button"
 import { createResource, createSignal, createEffect } from "solid-js"
 import { transformerNotationDiff } from "@shikijs/transformers"
+import { useI18n } from "../../lib/i18n"
 import style from "./content-markdown.module.css"
 
 const markedWithShiki = marked.use(
   {
     renderer: {
-      link({ href, title, text }) {
+      link(link: any) {
+        const { href, title, text } = link;
         const titleAttr = title ? ` title="${title}"` : ""
         return `<a href="${href}"${titleAttr} target="_blank" rel="noopener noreferrer">${text}</a>`
       },
@@ -36,7 +38,8 @@ interface Props {
   highlight?: boolean
 }
 export function ContentMarkdown(props: Props) {
-  // 添加调试日志
+  const { t } = useI18n();
+  // Add debug logs
   createEffect(() => {
     console.log("[ContentMarkdown] Text changed, length:", props.text?.length || 0);
   });
@@ -47,7 +50,7 @@ export function ContentMarkdown(props: Props) {
       console.log("[ContentMarkdown] Parsing markdown, length:", markdown?.length || 0);
       return markedWithShiki.parse(markdown)
     },
-    { initialValue: "" } // 添加初始值，避免undefined
+    { initialValue: "" } // Add initial value to avoid undefined
   )
   const [expanded, setExpanded] = createSignal(false)
   const overflow = createOverflow()
@@ -67,7 +70,7 @@ export function ContentMarkdown(props: Props) {
           data-slot="expand-button"
           onClick={() => setExpanded((e) => !e)}
         >
-          {expanded() ? "Show less" : "Show more"}
+          {expanded() ? t().common.showLess : t().common.showMore}
         </button>
       )}
       <CopyButton text={props.text} />

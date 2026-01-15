@@ -1,17 +1,19 @@
 import { createSignal, createEffect, For, Show } from "solid-js";
 import { client } from "../lib/opencode-client";
 import { configStore, setConfigStore } from "../stores/config";
+import { useI18n } from "../lib/i18n";
 
 interface ModelSelectorProps {
   onModelChange?: (providerID: string, modelID: string) => void;
 }
 
 export function ModelSelector(props: ModelSelectorProps) {
+  const { t } = useI18n();
   const [isOpen, setIsOpen] = createSignal(false);
   const [selectedProvider, setSelectedProvider] = createSignal<string>("");
   const [selectedModel, setSelectedModel] = createSignal<string>("");
 
-  // 加载 providers 配置
+  // Load providers config
   createEffect(async () => {
     try {
       const response = await client.getProviders();
@@ -21,11 +23,11 @@ export function ModelSelector(props: ModelSelectorProps) {
         loading: false,
       });
 
-      // 尝试从 localStorage 恢复上次选择的模型
+      // Try to restore last selected model from localStorage
       const savedModel = client.getDefaultModel();
       if (savedModel) {
         const savedProvider = response.all.find((p) => p.id === savedModel.providerID);
-        // 验证保存的 provider 和 model 仍然有效且已连接
+        // Verify saved provider and model are still valid and connected
         if (
           savedProvider &&
           response.connected?.includes(savedModel.providerID) &&
@@ -38,7 +40,7 @@ export function ModelSelector(props: ModelSelectorProps) {
         }
       }
 
-      // 如果没有保存的选择或已失效，使用默认选择
+      // If no saved selection or invalid, use default
       if (response.connected?.length > 0) {
         const firstProviderId = response.connected[0];
         const provider = response.all.find((p) => p.id === firstProviderId);
@@ -65,7 +67,7 @@ export function ModelSelector(props: ModelSelectorProps) {
     setSelectedProvider(providerID);
     setSelectedModel(modelID);
     setIsOpen(false);
-    // 保存到 localStorage
+    // Save to localStorage
     client.setDefaultModel(providerID, modelID);
     props.onModelChange?.(providerID, modelID);
   };
@@ -74,7 +76,7 @@ export function ModelSelector(props: ModelSelectorProps) {
     const provider = configStore.providers.find(
       (p) => p.id === selectedProvider()
     );
-    return provider?.name || "选择模型";
+    return provider?.name || t().model.selectModel;
   };
 
   const selectedModelName = () => {
@@ -105,7 +107,7 @@ export function ModelSelector(props: ModelSelectorProps) {
           />
         </svg>
         <span class="max-w-[200px] truncate">
-          {selectedModelName() || "选择模型"}
+          {selectedModelName() || t().model.selectModel}
         </span>
         <svg
           xmlns="http://www.w3.org/2000/svg"
@@ -127,7 +129,7 @@ export function ModelSelector(props: ModelSelectorProps) {
             when={connectedProviders().length > 0}
             fallback={
               <div class="p-4 text-center text-gray-500 dark:text-gray-400 text-sm">
-                没有可用的模型，请先配置服务器
+                {t().model.noModels}
               </div>
             }
           >
@@ -166,7 +168,7 @@ export function ModelSelector(props: ModelSelectorProps) {
         </div>
       </Show>
 
-      {/* 点击外部关闭下拉菜单 */}
+      {/* Close dropdown on outside click */}
       <Show when={isOpen()}>
         <div
           class="fixed inset-0 z-40"
