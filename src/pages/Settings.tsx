@@ -148,9 +148,9 @@ export default function Settings() {
             {/* General Settings Section */}
             <section>
               <h2 class="text-sm font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-4 px-1">
-                General
+                {t().settings.general}
               </h2>
-              <div class="bg-white dark:bg-zinc-800 rounded-xl shadow-sm border border-gray-200 dark:border-zinc-700 overflow-hidden">
+              <div class="bg-white dark:bg-zinc-800 rounded-xl shadow-sm border border-gray-200 dark:border-zinc-700 overflow-visible">
                 {/* Language Setting */}
                 <div class="p-4 sm:p-6 flex items-center justify-between gap-4">
                   <div>
@@ -158,7 +158,7 @@ export default function Settings() {
                       {t().settings.language}
                     </h3>
                     <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                      Choose your preferred interface language
+                      {t().settings.languageDesc}
                     </p>
                   </div>
                   <div class="flex-shrink-0">

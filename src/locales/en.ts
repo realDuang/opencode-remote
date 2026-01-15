@@ -72,7 +72,10 @@ export interface LocaleDict {
     saveFailed: string;
     saving: string;
     saveAndConnect: string;
+    general: string;
+    connection: string;
     language: string;
+    languageDesc: string;
     infoTitle: string;
     infoDefault: string;
     infoRemote: string;
@@ -237,8 +240,11 @@ export const en: LocaleDict = {
     urlUpdated: "Server URL updated",
     saveFailed: "Save failed. Please check the URL format",
     saving: "Saving...",
-    saveAndConnect: "Save & Connect",
+    saveAndConnect: "Save",
+    general: "General",
+    connection: "Connection",
     language: "Language",
+    languageDesc: "Choose your preferred interface language",
     infoTitle: "Info",
     infoDefault: "Default address is usually /opencode-api (pointing to local proxy)",
     infoRemote: "If connecting to a remote server, make sure the network is reachable",
