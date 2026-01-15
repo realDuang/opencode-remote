@@ -91,11 +91,12 @@ export function ModelSelector(props: ModelSelectorProps) {
     <div class="relative">
       <button
         onClick={() => setIsOpen(!isOpen())}
-        class="px-4 py-2 text-sm text-gray-700 dark:text-gray-300 bg-white dark:bg-zinc-800 border border-gray-300 dark:border-zinc-700 rounded-lg hover:bg-gray-50 dark:hover:bg-zinc-700 transition-colors flex items-center gap-2 max-w-[200px] md:max-w-xs w-full"
+        class="px-3 py-1.5 text-xs font-medium rounded-md transition-all flex items-center gap-1.5 bg-gray-100 dark:bg-zinc-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-zinc-700"
       >
         <svg
           xmlns="http://www.w3.org/2000/svg"
-          class="h-4 w-4"
+          width="14"
+          height="14"
           viewBox="0 0 20 20"
           fill="currentColor"
         >
@@ -106,14 +107,16 @@ export function ModelSelector(props: ModelSelectorProps) {
             clip-rule="evenodd"
           />
         </svg>
-        <span class="flex-1 truncate text-left">
+        <span class="max-w-[120px] truncate">
           {selectedModelName() || t().model.selectModel}
         </span>
         <svg
           xmlns="http://www.w3.org/2000/svg"
-          class="h-4 w-4"
+          width="12"
+          height="12"
           viewBox="0 0 20 20"
           fill="currentColor"
+          class={`transition-transform ${isOpen() ? "rotate-180" : ""}`}
         >
           <path
             fill-rule="evenodd"
@@ -124,7 +127,8 @@ export function ModelSelector(props: ModelSelectorProps) {
       </button>
 
       <Show when={isOpen()}>
-        <div class="absolute right-0 top-full mt-2 w-72 md:w-80 bg-white dark:bg-zinc-800 border border-gray-300 dark:border-zinc-700 rounded-lg shadow-lg z-50 max-h-[60vh] overflow-y-auto">
+        {/* Dropdown menu - opens upward */}
+        <div class="absolute right-0 bottom-full mb-2 w-72 md:w-80 bg-white dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 rounded-lg shadow-lg z-[60] max-h-[60vh] overflow-y-auto">
           <Show
             when={connectedProviders().length > 0}
             fallback={
@@ -171,7 +175,7 @@ export function ModelSelector(props: ModelSelectorProps) {
       {/* Close dropdown on outside click */}
       <Show when={isOpen()}>
         <div
-          class="fixed inset-0 z-40"
+          class="fixed inset-0 z-[55]"
           onClick={() => setIsOpen(false)}
         ></div>
       </Show>

@@ -1,6 +1,7 @@
 import { createSignal, createEffect } from "solid-js";
 import { IconArrowUp } from "./icons";
 import { useI18n } from "../lib/i18n";
+import { ModelSelector } from "./ModelSelector";
 
 // Agent type matching OpenCode's agent system
 export type AgentMode = "build" | "plan";
@@ -10,6 +11,7 @@ interface PromptInputProps {
   disabled?: boolean;
   currentAgent?: AgentMode;
   onAgentChange?: (agent: AgentMode) => void;
+  onModelChange?: (providerID: string, modelID: string) => void;
 }
 
 export function PromptInput(props: PromptInputProps) {
@@ -65,33 +67,39 @@ export function PromptInput(props: PromptInputProps) {
 
   return (
     <div class="w-full max-w-4xl mx-auto">
-      {/* Agent selector - Only Build and Plan modes */}
-      <div class="flex gap-2 mb-2 px-1">
-        <button
-          onClick={() => handleAgentChange("build")}
-          class={`px-3 py-1.5 text-xs font-medium rounded-md transition-all flex items-center gap-1.5 ${
-            agent() === "build"
-              ? "bg-emerald-600 text-white shadow-sm"
-              : "bg-gray-100 dark:bg-zinc-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-zinc-700"
-          }`}
-          title={t().prompt.buildMode}
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.64 3.64-1.28-1.28a1.21 1.21 0 0 0-1.72 0L2.36 18.64a1.21 1.21 0 0 0 0 1.72l1.28 1.28a1.2 1.2 0 0 0 1.72 0L21.64 5.36a1.2 1.2 0 0 0 0-1.72Z"/><path d="m14 7 3 3"/><path d="M5 6v4"/><path d="M19 14v4"/><path d="M10 2v2"/><path d="M7 8H3"/><path d="M21 16h-4"/><path d="M11 3H9"/></svg>
-          {t().prompt.build}
-        </button>
-        <button
-          onClick={() => handleAgentChange("plan")}
-          class={`px-3 py-1.5 text-xs font-medium rounded-md transition-all flex items-center gap-1.5 ${
-            agent() === "plan"
-              ? "bg-violet-600 text-white shadow-sm"
-              : "bg-gray-100 dark:bg-zinc-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-zinc-700"
-          }`}
-          title={t().prompt.planMode}
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
-          {t().prompt.plan}
-          <span class="text-[10px] opacity-75">({t().prompt.readOnly})</span>
-        </button>
+      {/* Agent selector and Model selector row */}
+      <div class="flex items-center justify-between gap-2 mb-2 px-1">
+        {/* Agent mode buttons - left side */}
+        <div class="flex gap-2">
+          <button
+            onClick={() => handleAgentChange("build")}
+            class={`px-3 py-1.5 text-xs font-medium rounded-md transition-all flex items-center gap-1.5 ${
+              agent() === "build"
+                ? "bg-emerald-600 text-white shadow-sm"
+                : "bg-gray-100 dark:bg-zinc-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-zinc-700"
+            }`}
+            title={t().prompt.buildMode}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.64 3.64-1.28-1.28a1.21 1.21 0 0 0-1.72 0L2.36 18.64a1.21 1.21 0 0 0 0 1.72l1.28 1.28a1.2 1.2 0 0 0 1.72 0L21.64 5.36a1.2 1.2 0 0 0 0-1.72Z"/><path d="m14 7 3 3"/><path d="M5 6v4"/><path d="M19 14v4"/><path d="M10 2v2"/><path d="M7 8H3"/><path d="M21 16h-4"/><path d="M11 3H9"/></svg>
+            {t().prompt.build}
+          </button>
+          <button
+            onClick={() => handleAgentChange("plan")}
+            class={`px-3 py-1.5 text-xs font-medium rounded-md transition-all flex items-center gap-1.5 ${
+              agent() === "plan"
+                ? "bg-violet-600 text-white shadow-sm"
+                : "bg-gray-100 dark:bg-zinc-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-zinc-700"
+            }`}
+            title={t().prompt.planMode}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+            {t().prompt.plan}
+            <span class="text-[10px] opacity-75">({t().prompt.readOnly})</span>
+          </button>
+        </div>
+
+        {/* Model selector - right side */}
+        <ModelSelector onModelChange={props.onModelChange} />
       </div>
 
       {/* Input area */}

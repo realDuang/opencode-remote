@@ -17,7 +17,6 @@ import {
 import { MessageList } from "../components/MessageList";
 import { PromptInput } from "../components/PromptInput";
 import { SessionSidebar } from "../components/SessionSidebar";
-import { ModelSelector } from "../components/ModelSelector";
 import { MessageV2, Permission } from "../types/opencode";
 import { useI18n } from "../lib/i18n";
 import { AgentMode } from "../components/PromptInput";
@@ -512,9 +511,6 @@ export default function Chat() {
               {currentAgent() === "plan" ? t().prompt.plan : t().prompt.build}
             </span>
           </div>
-          <div class="flex items-center gap-2 max-w-[50%] md:max-w-none">
-            <ModelSelector onModelChange={handleModelChange} />
-          </div>
         </header>
 
         {/* Message List */}
@@ -570,6 +566,7 @@ export default function Chat() {
                     disabled={sending()} 
                     currentAgent={currentAgent()}
                     onAgentChange={setCurrentAgent}
+                    onModelChange={handleModelChange}
                   />
                   <div class="mt-2 text-center">
                     <p class="text-[10px] text-gray-400 dark:text-gray-600">
