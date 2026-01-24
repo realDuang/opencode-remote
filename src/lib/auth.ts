@@ -12,6 +12,23 @@ export interface DeviceInfo {
   createdAt: number;
   lastSeenAt: number;
   ip: string;
+  isHost?: boolean;
+}
+
+export interface PendingRequest {
+  id: string;
+  device: {
+    name: string;
+    platform: string;
+    browser: string;
+  };
+  ip: string;
+  status: "pending" | "approved" | "denied" | "expired";
+  createdAt: number;
+  resolvedAt?: number;
+  deviceId?: string;
+  token?: string;
+  accessType?: "permanent" | "temporary";
 }
 
 interface AuthResponse {
@@ -20,6 +37,18 @@ interface AuthResponse {
   deviceId?: string;
   device?: DeviceInfo;
   error?: string;
+}
+
+interface AccessRequestResponse {
+  success: boolean;
+  requestId?: string;
+  error?: string;
+}
+
+interface AccessStatusResponse {
+  status: "pending" | "approved" | "denied" | "expired" | "not_found";
+  token?: string;
+  deviceId?: string;
 }
 
 interface ValidateResponse {
@@ -382,6 +411,112 @@ export class Auth {
     } catch (err) {
       logger.error("Local auth error:", err);
       return { success: false, error: "Network error" };
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // Device Approval Flow (Remote Access)
+  // -------------------------------------------------------------------------
+
+  static async requestAccess(code: string): Promise<{ success: boolean; requestId?: string; error?: string }> {
+    try {
+      const deviceInfo = this.collectDeviceInfo();
+
+      const response = await fetch("/api/auth/request-access", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code, device: deviceInfo }),
+      });
+
+      const data: AccessRequestResponse = await response.json();
+
+      if (response.ok && data.success && data.requestId) {
+        return { success: true, requestId: data.requestId };
+      } else {
+        return { success: false, error: data.error || "Request failed" };
+      }
+    } catch (err) {
+      logger.error("Request access error:", err);
+      return { success: false, error: "Network error" };
+    }
+  }
+
+  static async checkAccessStatus(requestId: string): Promise<AccessStatusResponse> {
+    try {
+      const response = await fetch(`/api/auth/check-status?requestId=${requestId}`);
+      const data: AccessStatusResponse = await response.json();
+
+      if (data.status === "approved" && data.token && data.deviceId) {
+        this.saveToken(data.token);
+        this.saveDeviceId(data.deviceId);
+      }
+
+      return data;
+    } catch (err) {
+      logger.error("Check access status error:", err);
+      return { status: "not_found" };
+    }
+  }
+
+  static async getPendingRequests(): Promise<PendingRequest[]> {
+    const token = this.getToken();
+    if (!token) return [];
+
+    try {
+      const response = await fetch("/api/admin/pending-requests", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        return data.requests || [];
+      }
+      return [];
+    } catch (err) {
+      logger.error("Get pending requests error:", err);
+      return [];
+    }
+  }
+
+  static async approveRequest(requestId: string): Promise<boolean> {
+    const token = this.getToken();
+    if (!token) return false;
+
+    try {
+      const response = await fetch("/api/admin/approve", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ requestId }),
+      });
+
+      return response.ok;
+    } catch (err) {
+      logger.error("Approve request error:", err);
+      return false;
+    }
+  }
+
+  static async denyRequest(requestId: string): Promise<boolean> {
+    const token = this.getToken();
+    if (!token) return false;
+
+    try {
+      const response = await fetch("/api/admin/deny", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ requestId }),
+      });
+
+      return response.ok;
+    } catch (err) {
+      logger.error("Deny request error:", err);
+      return false;
     }
   }
 }

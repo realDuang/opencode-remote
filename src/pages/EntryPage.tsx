@@ -1,4 +1,4 @@
-import { createSignal, onMount, Show, createEffect, Switch, Match } from "solid-js";
+import { createSignal, onMount, onCleanup, Show, createEffect, Switch, Match } from "solid-js";
 import { useNavigate } from "@solidjs/router";
 import { Auth } from "../lib/auth";
 import { useI18n } from "../lib/i18n";
@@ -24,6 +24,12 @@ export default function EntryPage() {
   const [code, setCode] = createSignal("");
   const [loginError, setLoginError] = createSignal("");
   const [loginLoading, setLoginLoading] = createSignal(false);
+  
+  // Approval flow states
+  const [waitingApproval, setWaitingApproval] = createSignal(false);
+  const [approvalStatus, setApprovalStatus] = createSignal<"pending" | "denied" | "expired" | null>(null);
+  const [deviceInfo, setDeviceInfo] = createSignal<{ name: string; platform: string; browser: string } | null>(null);
+  let statusPollTimer: ReturnType<typeof setInterval> | null = null;
 
   // Local mode states (remote access config)
   const [tunnelEnabled, setTunnelEnabled] = createSignal(false);
@@ -42,7 +48,19 @@ export default function EntryPage() {
   onMount(async () => {
     logger.debug("[EntryPage] Mounted, checking access type...");
 
-    // First check if already authenticated
+    // Check if local access first
+    const localAccess = await Auth.isLocalAccess();
+    logger.debug("[EntryPage] Is local access:", localAccess);
+    setIsLocal(localAccess);
+
+    // For localhost users, always show config page (don't auto-redirect to chat)
+    if (localAccess) {
+      setChecking(false);
+      loadLocalModeData();
+      return;
+    }
+
+    // For remote users, check if already authenticated
     const hasValidToken = await Auth.checkDeviceToken();
     if (hasValidToken) {
       logger.debug("[EntryPage] Already authenticated, redirecting to chat");
@@ -50,15 +68,12 @@ export default function EntryPage() {
       return;
     }
 
-    // Check if local access
-    const localAccess = await Auth.isLocalAccess();
-    logger.debug("[EntryPage] Is local access:", localAccess);
-    setIsLocal(localAccess);
     setChecking(false);
+  });
 
-    // If local, load remote access config data
-    if (localAccess) {
-      loadLocalModeData();
+  onCleanup(() => {
+    if (statusPollTimer) {
+      clearInterval(statusPollTimer);
     }
   });
 
@@ -73,13 +88,18 @@ export default function EntryPage() {
       logger.error("[EntryPage] Failed to get system info:", err);
     }
 
-    // We need to auto-auth first to get the access code
-    const authResult = await Auth.localAuth();
-    if (authResult.success) {
-      // Now we can get the access code
-      const code = await Auth.getAccessCode();
-      if (code) setAccessCode(code);
+    // Check if we already have a valid token before creating a new device
+    const hasValidToken = await Auth.checkDeviceToken();
+    if (!hasValidToken) {
+      const authResult = await Auth.localAuth();
+      if (!authResult.success) {
+        logger.error("[EntryPage] Local auth failed:", authResult.error);
+      }
     }
+
+    // Now we can get the access code
+    const code = await Auth.getAccessCode();
+    if (code) setAccessCode(code);
 
     // Get tunnel status
     checkTunnelStatus();
@@ -115,9 +135,16 @@ export default function EntryPage() {
     setLoginLoading(true);
 
     try {
-      const result = await Auth.loginWithCode(code());
-      if (result.success) {
-        navigate("/chat", { replace: true });
+      // Collect device info for display
+      const info = Auth.collectDeviceInfo();
+      setDeviceInfo(info);
+      
+      const result = await Auth.requestAccess(code());
+      
+      if (result.success && result.requestId) {
+        setWaitingApproval(true);
+        setApprovalStatus("pending");
+        startPollingStatus(result.requestId);
       } else {
         setLoginError(result.error || t().login.invalidCode);
       }
@@ -126,6 +153,43 @@ export default function EntryPage() {
       setLoginError(t().login.errorOccurred);
     } finally {
       setLoginLoading(false);
+    }
+  };
+
+  const startPollingStatus = (requestId: string) => {
+    // Clear existing timer if any
+    if (statusPollTimer) clearInterval(statusPollTimer);
+    
+    statusPollTimer = setInterval(async () => {
+      try {
+        const result = await Auth.checkAccessStatus(requestId);
+        
+        if (result.status === "approved") {
+          if (statusPollTimer) clearInterval(statusPollTimer);
+          setApprovalStatus(null);
+          navigate("/chat", { replace: true });
+        } else if (result.status === "denied") {
+          if (statusPollTimer) clearInterval(statusPollTimer);
+          setApprovalStatus("denied");
+        } else if (result.status === "expired") {
+          if (statusPollTimer) clearInterval(statusPollTimer);
+          setApprovalStatus("expired");
+        }
+        // "pending" -> continue polling
+      } catch (err) {
+        logger.error("[EntryPage] Status check error:", err);
+      }
+    }, 2000);
+  };
+
+  const handleRetry = () => {
+    setWaitingApproval(false);
+    setApprovalStatus(null);
+    setCode("");
+    setLoginError("");
+    if (statusPollTimer) {
+      clearInterval(statusPollTimer);
+      statusPollTimer = null;
     }
   };
 
@@ -237,47 +301,143 @@ export default function EntryPage() {
         </div>
       </Show>
 
-      {/* Remote access: Show login form */}
+      {/* Remote access: Show login form or approval status */}
       <Show when={!checking() && !isLocal()}>
         <div class="flex-1 flex items-center justify-center p-4">
-          <div class="w-full max-w-md p-8 bg-white dark:bg-zinc-800 rounded-lg shadow-md">
-            <h1 class="text-2xl font-bold text-center mb-6 text-gray-800 dark:text-white">
-              {t().login.title}
-            </h1>
+          <div class="w-full max-w-md p-8 bg-white dark:bg-zinc-800 rounded-lg shadow-md transition-all duration-300">
+            <Show when={!waitingApproval()} fallback={
+              <div class="text-center space-y-6">
+                <Switch>
+                  <Match when={approvalStatus() === "pending"}>
+                    <div class="animate-pulse w-16 h-16 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-blue-600 dark:text-blue-400">
+                        <path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/>
+                        <path d="M12 6v6l4 2"/>
+                      </svg>
+                    </div>
+                    <h2 class="text-xl font-bold text-gray-900 dark:text-white">
+                      {t().approval.waitingTitle}
+                    </h2>
+                    <p class="text-gray-500 dark:text-gray-400">
+                      {t().approval.waitingDesc}
+                    </p>
+                    
+                    <div class="bg-gray-50 dark:bg-zinc-700/50 rounded-lg p-4 text-left text-sm space-y-2">
+                      <div class="flex justify-between">
+                        <span class="text-gray-500 dark:text-gray-400">{t().approval.deviceName}:</span>
+                        <span class="font-medium text-gray-900 dark:text-white">{deviceInfo()?.name}</span>
+                      </div>
+                      <div class="flex justify-between">
+                        <span class="text-gray-500 dark:text-gray-400">{t().approval.platform}:</span>
+                        <span class="font-medium text-gray-900 dark:text-white">{deviceInfo()?.platform}</span>
+                      </div>
+                      <div class="flex justify-between">
+                        <span class="text-gray-500 dark:text-gray-400">{t().approval.browser}:</span>
+                        <span class="font-medium text-gray-900 dark:text-white">{deviceInfo()?.browser}</span>
+                      </div>
+                    </div>
 
-            <form onSubmit={handleLoginSubmit} class="space-y-4">
-              <div>
-                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  {t().login.accessCode}
-                </label>
-                <input
-                  type="text"
-                  value={code()}
-                  onInput={(e) => setCode(e.currentTarget.value)}
-                  placeholder={t().login.placeholder}
-                  class="w-full px-4 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:outline-none dark:bg-zinc-700 dark:border-zinc-600 dark:text-white"
-                  maxLength={6}
-                  disabled={loginLoading()}
-                  autofocus
-                />
+                    <div class="text-xs text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/10 p-3 rounded-md">
+                      {t().approval.waitingHint}
+                    </div>
+
+                    <button
+                      onClick={handleRetry}
+                      class="w-full mt-4 py-2 px-4 border border-gray-300 dark:border-zinc-600 hover:bg-gray-50 dark:hover:bg-zinc-700 text-gray-700 dark:text-gray-300 font-medium rounded-md transition-colors"
+                    >
+                      {t().common.cancel}
+                    </button>
+                  </Match>
+
+                  <Match when={approvalStatus() === "denied"}>
+                    <div class="w-16 h-16 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-red-600 dark:text-red-400">
+                        <circle cx="12" cy="12" r="10"/>
+                        <line x1="15" y1="9" x2="9" y2="15"/>
+                        <line x1="9" y1="9" x2="15" y2="15"/>
+                      </svg>
+                    </div>
+                    <h2 class="text-xl font-bold text-gray-900 dark:text-white">
+                      {t().approval.denied}
+                    </h2>
+                    <p class="text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/10 p-3 rounded-md text-sm">
+                      {t().approval.deniedDesc}
+                    </p>
+                    <button
+                      onClick={handleRetry}
+                      class="w-full py-2 px-4 bg-gray-200 dark:bg-zinc-700 hover:bg-gray-300 dark:hover:bg-zinc-600 text-gray-800 dark:text-white font-medium rounded-md transition-colors"
+                    >
+                      {t().approval.tryAgain}
+                    </button>
+                  </Match>
+
+                  <Match when={approvalStatus() === "expired"}>
+                    <div class="w-16 h-16 bg-orange-100 dark:bg-orange-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-orange-600 dark:text-orange-400">
+                        <circle cx="12" cy="12" r="10"/>
+                        <line x1="12" y1="8" x2="12" y2="12"/>
+                        <line x1="12" y1="16" x2="12.01" y2="16"/>
+                      </svg>
+                    </div>
+                    <h2 class="text-xl font-bold text-gray-900 dark:text-white">
+                      {t().approval.expired}
+                    </h2>
+                    <p class="text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-900/10 p-3 rounded-md text-sm">
+                      {t().approval.expiredDesc}
+                    </p>
+                    <button
+                      onClick={handleRetry}
+                      class="w-full py-2 px-4 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-md transition-colors"
+                    >
+                      {t().approval.tryAgain}
+                    </button>
+                  </Match>
+                </Switch>
               </div>
+            }>
+              <h1 class="text-2xl font-bold text-center mb-6 text-gray-800 dark:text-white">
+                {t().login.title}
+              </h1>
 
-              <Show when={loginError()}>
-                <div class="text-red-500 text-sm text-center">{loginError()}</div>
-              </Show>
+              <form onSubmit={handleLoginSubmit} class="space-y-4">
+                <div>
+                  <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    {t().login.accessCode}
+                  </label>
+                  <input
+                    type="text"
+                    value={code()}
+                    onInput={(e) => setCode(e.currentTarget.value)}
+                    placeholder={t().login.placeholder}
+                    class="w-full px-4 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:outline-none dark:bg-zinc-700 dark:border-zinc-600 dark:text-white text-center text-lg tracking-widest font-mono"
+                    maxLength={6}
+                    disabled={loginLoading()}
+                    autofocus
+                  />
+                </div>
 
-              <button
-                type="submit"
-                disabled={loginLoading() || code().length !== 6}
-                class="w-full py-2 px-4 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {loginLoading() ? t().login.verifying : t().login.connect}
-              </button>
-            </form>
+                <Show when={loginError()}>
+                  <div class="text-red-500 text-sm text-center bg-red-50 dark:bg-red-900/10 p-2 rounded border border-red-100 dark:border-red-900/30">
+                    {loginError()}
+                  </div>
+                </Show>
 
-            <p class="text-xs text-gray-500 dark:text-gray-400 text-center mt-4">
-              {t().login.rememberDevice}
-            </p>
+                <button
+                  type="submit"
+                  disabled={loginLoading() || code().length !== 6}
+                  class="w-full py-2.5 px-4 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                >
+                  <Show when={loginLoading()} fallback={t().login.connect}>
+                    <div class="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full" />
+                    <span>{t().login.verifying}</span>
+                  </Show>
+                </button>
+              </form>
+
+              <p class="text-xs text-gray-500 dark:text-gray-400 text-center mt-6">
+                {t().login.rememberDevice}
+              </p>
+            </Show>
           </div>
         </div>
       </Show>

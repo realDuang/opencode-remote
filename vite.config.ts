@@ -86,12 +86,19 @@ export default defineConfig({
       name: "custom-api-middleware",
       configureServer(server) {
         // ====================================================================
-        // Auth: Verify code and issue device token
+        // Auth: Verify code and issue device token (LOCALHOST ONLY)
         // POST /api/auth/verify
+        // Remote users must use /api/auth/request-access + approval flow
         // ====================================================================
         server.middlewares.use(async (req, res, next) => {
           if (req.url !== "/api/auth/verify" || req.method !== "POST") {
             next();
+            return;
+          }
+
+          const clientIp = getClientIp(req);
+          if (!isLocalhost(clientIp)) {
+            sendJson(res, { error: "Use request-access endpoint for remote devices" }, 403);
             return;
           }
 
@@ -110,7 +117,6 @@ export default defineConfig({
               // Create new device
               const deviceId = deviceStore.generateDeviceId();
               const token = deviceStore.generateToken(deviceId);
-              const clientIp = getClientIp(req);
 
               const deviceInfo: DeviceInfo = {
                 id: deviceId,
@@ -120,6 +126,7 @@ export default defineConfig({
                 createdAt: Date.now(),
                 lastSeenAt: Date.now(),
                 ip: clientIp,
+                isHost: true,
               };
 
               deviceStore.addDevice(deviceInfo);
@@ -272,6 +279,209 @@ export default defineConfig({
               deviceId,
               device: deviceInfo,
             });
+          } catch (err) {
+            sendJson(res, { error: "Bad request" }, 400);
+          }
+        });
+
+        // ====================================================================
+        // Auth: Request access (remote device submits approval request)
+        // POST /api/auth/request-access
+        // ====================================================================
+        server.middlewares.use(async (req, res, next) => {
+          if (req.url !== "/api/auth/request-access" || req.method !== "POST") {
+            next();
+            return;
+          }
+
+          try {
+            const { code, device } = await parseBody(req);
+            const authCodePath = path.join(process.cwd(), ".auth-code");
+
+            if (!fs.existsSync(authCodePath)) {
+              sendJson(res, { success: false, error: "Auth code not found" }, 500);
+              return;
+            }
+
+            const validCode = fs.readFileSync(authCodePath, "utf-8").trim();
+
+            if (code !== validCode) {
+              sendJson(res, { success: false, error: "Invalid code" }, 401);
+              return;
+            }
+
+            const clientIp = getClientIp(req);
+            const pendingRequest = deviceStore.createPendingRequest(
+              {
+                name: device?.name || "Unknown Device",
+                platform: device?.platform || "Unknown",
+                browser: device?.browser || "Unknown",
+              },
+              clientIp
+            );
+
+            sendJson(res, {
+              success: true,
+              requestId: pendingRequest.id,
+            });
+          } catch (err) {
+            sendJson(res, { success: false, error: "Bad request" }, 400);
+          }
+        });
+
+        // ====================================================================
+        // Auth: Check access request status (remote device polls)
+        // GET /api/auth/check-status?requestId=xxx
+        // ====================================================================
+        server.middlewares.use((req, res, next) => {
+          const url = new URL(req.url || "", `http://${req.headers.host}`);
+          if (url.pathname !== "/api/auth/check-status" || req.method !== "GET") {
+            next();
+            return;
+          }
+
+          const requestId = url.searchParams.get("requestId");
+          if (!requestId) {
+            sendJson(res, { status: "not_found" });
+            return;
+          }
+
+          const request = deviceStore.getPendingRequest(requestId);
+          if (!request) {
+            sendJson(res, { status: "not_found" });
+            return;
+          }
+
+          if (request.status === "approved") {
+            sendJson(res, {
+              status: "approved",
+              token: request.token,
+              deviceId: request.deviceId,
+            });
+          } else {
+            sendJson(res, { status: request.status });
+          }
+        });
+
+        // ====================================================================
+        // Admin: Get pending access requests (host only)
+        // GET /api/admin/pending-requests
+        // ====================================================================
+        server.middlewares.use((req, res, next) => {
+          if (req.url !== "/api/admin/pending-requests" || req.method !== "GET") {
+            next();
+            return;
+          }
+
+          const token = extractBearerToken(req);
+          if (!token) {
+            sendJson(res, { error: "Unauthorized" }, 401);
+            return;
+          }
+
+          const result = deviceStore.verifyToken(token);
+          if (!result.valid || !result.deviceId) {
+            sendJson(res, { error: "Invalid token" }, 401);
+            return;
+          }
+
+          const clientIp = getClientIp(req);
+          if (!isLocalhost(clientIp)) {
+            sendJson(res, { error: "Host access only" }, 403);
+            return;
+          }
+
+          const requests = deviceStore.listPendingRequests();
+          sendJson(res, { requests });
+        });
+
+        // ====================================================================
+        // Admin: Approve access request (host only)
+        // POST /api/admin/approve
+        // ====================================================================
+        server.middlewares.use(async (req, res, next) => {
+          if (req.url !== "/api/admin/approve" || req.method !== "POST") {
+            next();
+            return;
+          }
+
+          const token = extractBearerToken(req);
+          if (!token) {
+            sendJson(res, { error: "Unauthorized" }, 401);
+            return;
+          }
+
+          const result = deviceStore.verifyToken(token);
+          if (!result.valid || !result.deviceId) {
+            sendJson(res, { error: "Invalid token" }, 401);
+            return;
+          }
+
+          const clientIp = getClientIp(req);
+          if (!isLocalhost(clientIp)) {
+            sendJson(res, { error: "Host access only" }, 403);
+            return;
+          }
+
+          try {
+            const { requestId } = await parseBody(req);
+            if (!requestId) {
+              sendJson(res, { error: "requestId is required" }, 400);
+              return;
+            }
+
+            const approved = deviceStore.approveRequest(requestId);
+            if (approved) {
+              sendJson(res, { success: true, device: deviceStore.getDevice(approved.deviceId!) });
+            } else {
+              sendJson(res, { error: "Request not found or already processed" }, 404);
+            }
+          } catch (err) {
+            sendJson(res, { error: "Bad request" }, 400);
+          }
+        });
+
+        // ====================================================================
+        // Admin: Deny access request (host only)
+        // POST /api/admin/deny
+        // ====================================================================
+        server.middlewares.use(async (req, res, next) => {
+          if (req.url !== "/api/admin/deny" || req.method !== "POST") {
+            next();
+            return;
+          }
+
+          const token = extractBearerToken(req);
+          if (!token) {
+            sendJson(res, { error: "Unauthorized" }, 401);
+            return;
+          }
+
+          const result = deviceStore.verifyToken(token);
+          if (!result.valid || !result.deviceId) {
+            sendJson(res, { error: "Invalid token" }, 401);
+            return;
+          }
+
+          const clientIp = getClientIp(req);
+          if (!isLocalhost(clientIp)) {
+            sendJson(res, { error: "Host access only" }, 403);
+            return;
+          }
+
+          try {
+            const { requestId } = await parseBody(req);
+            if (!requestId) {
+              sendJson(res, { error: "requestId is required" }, 400);
+              return;
+            }
+
+            const denied = deviceStore.denyRequest(requestId);
+            if (denied) {
+              sendJson(res, { success: true });
+            } else {
+              sendJson(res, { error: "Request not found or already processed" }, 404);
+            }
           } catch (err) {
             sendJson(res, { error: "Bad request" }, 400);
           }

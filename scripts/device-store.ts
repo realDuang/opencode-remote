@@ -14,10 +14,40 @@ export interface DeviceInfo {
   createdAt: number;
   lastSeenAt: number;
   ip: string;
+  /** Whether this device is the local host (localhost access) */
+  isHost?: boolean;
+}
+
+/**
+ * Pending access request from a remote device
+ * Lifecycle: pending -> approved/denied -> (expires after 2 minutes if no action)
+ */
+export interface PendingRequest {
+  /** Unique request ID */
+  id: string;
+  /** Device fingerprint info */
+  device: {
+    name: string;
+    platform: string;
+    browser: string;
+  };
+  /** Client IP address */
+  ip: string;
+  /** Request status */
+  status: "pending" | "approved" | "denied" | "expired";
+  /** Timestamp when request was created */
+  createdAt: number;
+  /** Timestamp when request was resolved (approved/denied) */
+  resolvedAt?: number;
+  /** If approved, the generated device ID */
+  deviceId?: string;
+  /** If approved, the generated token */
+  token?: string;
 }
 
 interface DeviceStoreData {
   devices: Record<string, DeviceInfo>;
+  pendingRequests: Record<string, PendingRequest>;
   revokedTokens: string[];
   jwtSecret: string;
 }
@@ -111,6 +141,7 @@ class DeviceStore {
         const parsed = JSON.parse(raw);
         return {
           devices: parsed.devices || {},
+          pendingRequests: parsed.pendingRequests || {},
           revokedTokens: parsed.revokedTokens || [],
           jwtSecret: parsed.jwtSecret || this.generateSecret(),
         };
@@ -124,6 +155,7 @@ class DeviceStore {
   private createEmpty(): DeviceStoreData {
     const data: DeviceStoreData = {
       devices: {},
+      pendingRequests: {},
       revokedTokens: [],
       jwtSecret: this.generateSecret(),
     };
@@ -238,6 +270,143 @@ class DeviceStore {
       }
     }
     return count;
+  }
+
+  // -------------------------------------------------------------------------
+  // Pending Request Management
+  // -------------------------------------------------------------------------
+
+  private static REQUEST_EXPIRY_MS = 2 * 60 * 1000; // 2 minutes
+
+  generateRequestId(): string {
+    return crypto.randomBytes(8).toString("hex");
+  }
+
+  createPendingRequest(device: { name: string; platform: string; browser: string }, ip: string): PendingRequest {
+    this.cleanupExpiredRequests();
+
+    const request: PendingRequest = {
+      id: this.generateRequestId(),
+      device,
+      ip,
+      status: "pending",
+      createdAt: Date.now(),
+    };
+
+    this.data.pendingRequests[request.id] = request;
+    this.save();
+    return request;
+  }
+
+  getPendingRequest(requestId: string): PendingRequest | undefined {
+    const request = this.data.pendingRequests[requestId];
+    if (!request) return undefined;
+
+    if (this.isRequestExpired(request)) {
+      this.expireRequest(requestId);
+      return this.data.pendingRequests[requestId];
+    }
+
+    return request;
+  }
+
+  listPendingRequests(): PendingRequest[] {
+    this.cleanupExpiredRequests();
+    return Object.values(this.data.pendingRequests)
+      .filter(r => r.status === "pending")
+      .sort((a, b) => b.createdAt - a.createdAt);
+  }
+
+  approveRequest(requestId: string): PendingRequest | undefined {
+    const request = this.data.pendingRequests[requestId];
+    if (!request || request.status !== "pending") return undefined;
+
+    if (this.isRequestExpired(request)) {
+      this.expireRequest(requestId);
+      return undefined;
+    }
+
+    const deviceId = this.generateDeviceId();
+    const token = generateJWT({ deviceId }, this.data.jwtSecret, 365);
+
+    const deviceInfo: DeviceInfo = {
+      id: deviceId,
+      name: request.device.name,
+      platform: request.device.platform,
+      browser: request.device.browser,
+      createdAt: Date.now(),
+      lastSeenAt: Date.now(),
+      ip: request.ip,
+      isHost: false,
+    };
+
+    this.addDevice(deviceInfo);
+
+    request.status = "approved";
+    request.resolvedAt = Date.now();
+    request.deviceId = deviceId;
+    request.token = token;
+
+    this.save();
+    return request;
+  }
+
+  denyRequest(requestId: string): PendingRequest | undefined {
+    const request = this.data.pendingRequests[requestId];
+    if (!request || request.status !== "pending") return undefined;
+
+    request.status = "denied";
+    request.resolvedAt = Date.now();
+
+    this.save();
+    return request;
+  }
+
+  private isRequestExpired(request: PendingRequest): boolean {
+    if (request.status !== "pending") return false;
+    return Date.now() - request.createdAt > DeviceStore.REQUEST_EXPIRY_MS;
+  }
+
+  private expireRequest(requestId: string): void {
+    const request = this.data.pendingRequests[requestId];
+    if (request && request.status === "pending") {
+      request.status = "expired";
+      request.resolvedAt = Date.now();
+      this.save();
+    }
+  }
+
+  private cleanupExpiredRequests(): void {
+    let changed = false;
+    for (const [id, request] of Object.entries(this.data.pendingRequests)) {
+      if (this.isRequestExpired(request)) {
+        request.status = "expired";
+        request.resolvedAt = Date.now();
+        changed = true;
+      }
+    }
+
+    const oldCount = Object.keys(this.data.pendingRequests).length;
+    const cutoff = Date.now() - 24 * 60 * 60 * 1000; // Keep resolved requests for 24 hours
+    for (const [id, request] of Object.entries(this.data.pendingRequests)) {
+      if (request.status !== "pending" && request.resolvedAt && request.resolvedAt < cutoff) {
+        delete this.data.pendingRequests[id];
+        changed = true;
+      }
+    }
+
+    if (changed) {
+      this.save();
+    }
+  }
+
+  deleteRequest(requestId: string): boolean {
+    if (this.data.pendingRequests[requestId]) {
+      delete this.data.pendingRequests[requestId];
+      this.save();
+      return true;
+    }
+    return false;
   }
 }
 

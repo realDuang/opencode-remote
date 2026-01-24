@@ -176,6 +176,7 @@ export interface LocaleDict {
   devices: {
     title: string;
     currentDevice: string;
+    hostDevice: string;
     lastSeen: string;
     firstLogin: string;
     rename: string;
@@ -202,6 +203,30 @@ export interface LocaleDict {
     enterChatDesc: string;
     localModeTitle: string;
     localModeDesc: string;
+  };
+
+  // Device approval
+  approval: {
+    waitingTitle: string;
+    waitingDesc: string;
+    waitingHint: string;
+    denied: string;
+    deniedDesc: string;
+    expired: string;
+    expiredDesc: string;
+    tryAgain: string;
+    newRequest: string;
+    newRequestTitle: string;
+    deviceName: string;
+    platform: string;
+    browser: string;
+    ipAddress: string;
+    approve: string;
+    deny: string;
+    pendingRequests: string;
+    noPendingRequests: string;
+    requestApproved: string;
+    requestDenied: string;
   };
 }
 
@@ -382,6 +407,7 @@ export const en: LocaleDict = {
   devices: {
     title: "Authorized Devices",
     currentDevice: "Current device",
+    hostDevice: "Host",
     lastSeen: "Last seen",
     firstLogin: "First login",
     rename: "Rename",
@@ -408,5 +434,29 @@ export const en: LocaleDict = {
     enterChatDesc: "Start using OpenCode AI assistant",
     localModeTitle: "Local Access Mode",
     localModeDesc: "You're accessing from localhost. Configure remote access below or enter chat directly.",
+  },
+
+  // Device approval
+  approval: {
+    waitingTitle: "Waiting for Approval",
+    waitingDesc: "Your request has been sent to the host device",
+    waitingHint: "Please wait for the host to approve your connection",
+    denied: "Access Denied",
+    deniedDesc: "The host has denied your connection request",
+    expired: "Request Expired",
+    expiredDesc: "Your request has expired. Please try again.",
+    tryAgain: "Try Again",
+    newRequest: "New Device Request",
+    newRequestTitle: "A device is requesting access",
+    deviceName: "Device",
+    platform: "Platform",
+    browser: "Browser",
+    ipAddress: "IP Address",
+    approve: "Approve",
+    deny: "Deny",
+    pendingRequests: "Pending Requests",
+    noPendingRequests: "No pending requests",
+    requestApproved: "Request approved",
+    requestDenied: "Request denied",
   },
 };

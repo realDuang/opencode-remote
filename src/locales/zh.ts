@@ -177,6 +177,7 @@ export const zh: LocaleDict = {
   devices: {
     title: "已授权设备",
     currentDevice: "当前设备",
+    hostDevice: "主机",
     lastSeen: "最后活跃",
     firstLogin: "首次登录",
     rename: "重命名",
@@ -203,5 +204,29 @@ export const zh: LocaleDict = {
     enterChatDesc: "开始使用 OpenCode AI 助手",
     localModeTitle: "本机访问模式",
     localModeDesc: "您正在从本机访问。可以在下方配置远程访问，或直接进入聊天。",
+  },
+
+  // Device approval
+  approval: {
+    waitingTitle: "等待主机批准",
+    waitingDesc: "您的请求已发送至主机设备",
+    waitingHint: "请等待主机批准您的连接请求",
+    denied: "访问被拒绝",
+    deniedDesc: "主机已拒绝您的连接请求",
+    expired: "请求已过期",
+    expiredDesc: "您的请求已过期，请重新申请。",
+    tryAgain: "重试",
+    newRequest: "新设备请求",
+    newRequestTitle: "有设备请求接入",
+    deviceName: "设备",
+    platform: "平台",
+    browser: "浏览器",
+    ipAddress: "IP 地址",
+    approve: "批准",
+    deny: "拒绝",
+    pendingRequests: "待处理请求",
+    noPendingRequests: "没有待处理的请求",
+    requestApproved: "请求已批准",
+    requestDenied: "请求已拒绝",
   },
 };
