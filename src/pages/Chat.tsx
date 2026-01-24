@@ -47,28 +47,10 @@ function binarySearch<T>(
   return { found: false, index: left };
 }
 
-// Helper to process raw session data into SessionInfo format
-function processSession(
-  s: Session.Info,
-  defaultTitle: string,
-): {
-  id: string;
-  title: string;
-  directory: string;
-  parentID?: string;
-  createdAt: string;
-  updatedAt: string;
-  summary?: { additions: number; deletions: number; files: number };
-} {
-  return {
-    id: s.id,
-    title: s.title || defaultTitle,
-    directory: s.directory || "",
-    parentID: s.parentID,
-    createdAt: new Date(s.time.created).toISOString(),
-    updatedAt: new Date(s.time.updated).toISOString(),
-    summary: s.summary,
-  };
+const DEFAULT_TITLE_PATTERN = /^(New session - |Child session - )\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
+
+function isDefaultTitle(title: string): boolean {
+  return DEFAULT_TITLE_PATTERN.test(title);
 }
 
 export default function Chat() {
@@ -77,7 +59,14 @@ export default function Chat() {
   const [sending, setSending] = createSignal(false);
   const [messagesRef, setMessagesRef] = createSignal<HTMLDivElement>();
   const [loadingMessages, setLoadingMessages] = createSignal(false);
-  // 初始化时从 localStorage 读取保存的模型
+
+  const getDisplayTitle = (title: string): string => {
+    if (!title || isDefaultTitle(title)) {
+      return t().sidebar.newSession;
+    }
+    return title;
+  };
+
   const [currentSessionModel, setCurrentSessionModel] = createSignal<{
     providerID: string;
     modelID: string;
@@ -90,7 +79,6 @@ export default function Chat() {
   const [isSidebarOpen, setIsSidebarOpen] = createSignal(false);
   const [isMobile, setIsMobile] = createSignal(window.innerWidth < 768);
   const [isLocalHost, setIsLocalHost] = createSignal(false);
-  const [summarizedSessions, setSummarizedSessions] = createSignal<Set<string>>(new Set());
 
   const handleModelChange = (providerID: string, modelID: string) => {
     logger.debug("[Chat] Model changed to:", { providerID, modelID });
@@ -179,7 +167,7 @@ export default function Chat() {
     // Process session list, convert timestamps to ISO strings
     const processedSessions = sessions.map((s) => ({
       id: s.id,
-      title: s.title || t().sidebar.newSession,
+      title: s.title || "",
       directory: s.directory || "",
       parentID: s.parentID,
       createdAt: new Date(s.time.created).toISOString(),
@@ -196,10 +184,10 @@ export default function Chat() {
     let currentSession = processedSessions[0];
     if (!currentSession) {
       logger.debug("[Init] No sessions found, creating new one");
-      const newSession = await client.createSession(t().sidebar.newSession);
+      const newSession = await client.createSession();
       currentSession = {
         id: newSession.id,
-        title: newSession.title || t().sidebar.newSession,
+        title: newSession.title || "",
         directory: newSession.directory || "",
         parentID: newSession.parentID,
         createdAt: new Date(newSession.time.created).toISOString(),
@@ -237,12 +225,12 @@ export default function Chat() {
   // New session
   const handleNewSession = async () => {
     logger.debug("[NewSession] Creating new session");
-    const newSession = await client.createSession(t().sidebar.newSession);
+    const newSession = await client.createSession();
     logger.debug("[NewSession] Created:", newSession);
 
     const processedSession = {
       id: newSession.id,
-      title: newSession.title || t().sidebar.newSession,
+      title: newSession.title || "",
       directory: newSession.directory || "",
       parentID: newSession.parentID,
       createdAt: new Date(newSession.time.created).toISOString(),
@@ -341,6 +329,21 @@ export default function Chat() {
       case "message.updated": {
         const msgInfo = event.data as MessageV2.Info;
         const targetSessionId = msgInfo.sessionID;
+        
+        if (msgInfo.role === "user") {
+          const currentMessages = messageStore.message[targetSessionId] || [];
+          const tempMessages = currentMessages.filter(m => m.id.startsWith("msg-temp-"));
+          
+          if (tempMessages.length > 0) {
+            setMessageStore("message", targetSessionId, (draft) =>
+              draft.filter(m => !m.id.startsWith("msg-temp-"))
+            );
+            tempMessages.forEach(tempMsg => {
+              setMessageStore("part", tempMsg.id, undefined as any);
+            });
+          }
+        }
+        
         const messages = messageStore.message[targetSessionId] || [];
         const index = binarySearch(messages, msgInfo.id, (m) => m.id);
 
@@ -355,33 +358,18 @@ export default function Chat() {
             return newMessages;
           });
         }
-
-        if (
-          msgInfo.role === "assistant" &&
-          msgInfo.time.completed &&
-          !summarizedSessions().has(targetSessionId)
-        ) {
-          const session = sessionStore.list.find((s) => s.id === targetSessionId);
-          const isDefaultTitle = !session?.title || session.title === t().sidebar.newSession;
-          
-          if (isDefaultTitle && msgInfo.providerID && msgInfo.modelID) {
-            setSummarizedSessions((prev) => new Set(prev).add(targetSessionId));
-            client.summarizeSession(targetSessionId, msgInfo.providerID, msgInfo.modelID).catch((err) => {
-              logger.error("[Summarize] Failed:", err);
-            });
-          }
-        }
         break;
       }
 
       case "session.updated": {
         const updated = event.data;
+        logger.debug("[SSE] session.updated received:", updated);
         setSessionStore("list", (list) =>
           list.map((s) =>
             s.id === updated.id
               ? {
                   ...s,
-                  title: updated.title || t().sidebar.newSession,
+                  title: updated.title || "",
                   directory: updated.directory || s.directory || "",
                   createdAt: new Date(updated.time.created).toISOString(),
                   updatedAt: new Date(updated.time.updated).toISOString(),
@@ -542,7 +530,7 @@ export default function Chat() {
               <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" x2="20" y1="12" y2="12" /><line x1="4" x2="20" y1="6" y2="6" /><line x1="4" x2="20" y1="18" y2="18" /></svg>
             </button>
             <h1 class="text-base font-semibold text-gray-900 dark:text-white truncate">
-              {sessionStore.list.find(s => s.id === sessionStore.current)?.title || "OpenCode Remote"}
+              {getDisplayTitle(sessionStore.list.find(s => s.id === sessionStore.current)?.title || "")}
             </h1>
             {/* Agent Mode Indicator */}
             <span class={`px-2 py-0.5 text-[10px] font-medium rounded-full ${

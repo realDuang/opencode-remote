@@ -31,6 +31,17 @@ export function SessionSidebar(props: SessionSidebarProps) {
     return parts[parts.length - 1] || t().common.unknownProject;
   };
 
+  const isDefaultTitle = (title: string): boolean => {
+    return /^(New session - |Child session - )\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(title);
+  };
+
+  const getDisplayTitle = (title: string): string => {
+    if (!title || isDefaultTitle(title)) {
+      return t().sidebar.newSession;
+    }
+    return title;
+  };
+
   // Group sessions by project
   const projectGroups = createMemo((): ProjectGroup[] => {
     const groups: Map<string, SessionInfo[]> = new Map();
@@ -299,7 +310,7 @@ export function SessionSidebar(props: SessionSidebarProps) {
                                           }`}
                                           onDblClick={startEditing}
                                         >
-                                          {session.title || t().sidebar.newSession}
+                                          {getDisplayTitle(session.title)}
                                         </div>
                                       }
                                     >
