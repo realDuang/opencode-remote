@@ -122,6 +122,7 @@ export const zh: LocaleDict = {
     newSession: "新建会话",
     deleteConfirm: "确定要删除这个会话吗？",
     deleteSession: "删除会话",
+    renameSession: "重命名会话",
     justNow: "刚刚",
     minutesAgo: "{count}分钟前",
     hoursAgo: "{count}小时前",

@@ -84,6 +84,19 @@ export class OpenCodeClient {
     );
   }
 
+  async updateSession(id: string, updates: { title?: string }) {
+    return this.request<Session.Info>(`/session/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(updates),
+    });
+  }
+
+  async summarizeSession(id: string) {
+    return this.request<void>(`/session/${id}/summarize`, {
+      method: "POST",
+    });
+  }
+
   // 配置管理
   async getProviders() {
     return this.request<Config.ProviderResponse>("/provider");

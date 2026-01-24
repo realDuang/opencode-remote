@@ -90,6 +90,7 @@ export default function Chat() {
   const [isSidebarOpen, setIsSidebarOpen] = createSignal(false);
   const [isMobile, setIsMobile] = createSignal(window.innerWidth < 768);
   const [isLocalHost, setIsLocalHost] = createSignal(false);
+  const [summarizedSessions, setSummarizedSessions] = createSignal<Set<string>>(new Set());
 
   const handleModelChange = (providerID: string, modelID: string) => {
     logger.debug("[Chat] Model changed to:", { providerID, modelID });
@@ -281,7 +282,18 @@ export default function Chat() {
     }
   };
 
-  // Handle permission response
+  const handleRenameSession = async (sessionId: string, newTitle: string) => {
+    logger.debug("[RenameSession] Renaming session:", sessionId, newTitle);
+    try {
+      await client.updateSession(sessionId, { title: newTitle });
+      setSessionStore("list", (list) =>
+        list.map((s) => (s.id === sessionId ? { ...s, title: newTitle } : s))
+      );
+    } catch (error) {
+      logger.error("[RenameSession] Failed:", error);
+    }
+  };
+
   const handlePermissionRespond = async (
     sessionID: string,
     permissionID: string,
@@ -328,19 +340,36 @@ export default function Chat() {
 
       case "message.updated": {
         const msgInfo = event.data as MessageV2.Info;
-        const messages = messageStore.message[sessionId] || [];
+        const targetSessionId = msgInfo.sessionID;
+        const messages = messageStore.message[targetSessionId] || [];
         const index = binarySearch(messages, msgInfo.id, (m) => m.id);
 
         if (index.found) {
-          setMessageStore("message", sessionId, index.index, msgInfo);
-        } else if (!messageStore.message[sessionId]) {
-          setMessageStore("message", sessionId, [msgInfo]);
+          setMessageStore("message", targetSessionId, index.index, msgInfo);
+        } else if (!messageStore.message[targetSessionId]) {
+          setMessageStore("message", targetSessionId, [msgInfo]);
         } else {
-          setMessageStore("message", sessionId, (draft) => {
+          setMessageStore("message", targetSessionId, (draft) => {
             const newMessages = [...draft];
             newMessages.splice(index.index, 0, msgInfo);
             return newMessages;
           });
+        }
+
+        if (
+          msgInfo.role === "assistant" &&
+          msgInfo.time.completed &&
+          !summarizedSessions().has(targetSessionId)
+        ) {
+          const session = sessionStore.list.find((s) => s.id === targetSessionId);
+          const isDefaultTitle = !session?.title || session.title === t().sidebar.newSession;
+          
+          if (isDefaultTitle) {
+            setSummarizedSessions((prev) => new Set(prev).add(targetSessionId));
+            client.summarizeSession(targetSessionId).catch((err) => {
+              logger.error("[Summarize] Failed:", err);
+            });
+          }
         }
         break;
       }
@@ -467,6 +496,7 @@ export default function Chat() {
               onSelectSession={handleSelectSession}
               onNewSession={handleNewSession}
               onDeleteSession={handleDeleteSession}
+              onRenameSession={handleRenameSession}
             />
           </Show>
         </div>
