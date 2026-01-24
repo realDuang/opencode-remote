@@ -89,6 +89,7 @@ export default function Chat() {
   // Mobile Sidebar State
   const [isSidebarOpen, setIsSidebarOpen] = createSignal(false);
   const [isMobile, setIsMobile] = createSignal(window.innerWidth < 768);
+  const [isLocalHost, setIsLocalHost] = createSignal(false);
 
   const handleModelChange = (providerID: string, modelID: string) => {
     logger.debug("[Chat] Model changed to:", { providerID, modelID });
@@ -437,6 +438,7 @@ export default function Chat() {
 
   createEffect(() => {
     initializeSession();
+    Auth.isLocalAccess().then(setIsLocalHost);
 
     const cleanup = client.connectSSE(handleSSEEvent);
     onCleanup(cleanup);
@@ -474,13 +476,15 @@ export default function Chat() {
 
         {/* User Actions Footer in Sidebar */}
         <div class="p-3 border-t border-gray-200 dark:border-zinc-800 space-y-1 bg-gray-50 dark:bg-zinc-950">
-          <button
-            onClick={() => navigate("/remote")}
-            class="w-full flex items-center gap-3 px-3 py-2 text-sm font-medium text-gray-600 dark:text-gray-400 hover:bg-white dark:hover:bg-zinc-800 hover:text-gray-900 dark:hover:text-white rounded-lg transition-all shadow-sm hover:shadow"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="3" rx="2" /><line x1="8" x2="16" y1="21" y2="21" /><line x1="12" x2="12" y1="17" y2="21" /></svg>
-            {t().chat.remoteAccess}
-          </button>
+          <Show when={isLocalHost()}>
+            <button
+              onClick={() => navigate("/")}
+              class="w-full flex items-center gap-3 px-3 py-2 text-sm font-medium text-gray-600 dark:text-gray-400 hover:bg-white dark:hover:bg-zinc-800 hover:text-gray-900 dark:hover:text-white rounded-lg transition-all shadow-sm hover:shadow"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="3" rx="2" /><line x1="8" x2="16" y1="21" y2="21" /><line x1="12" x2="12" y1="17" y2="21" /></svg>
+              {t().chat.remoteAccess}
+            </button>
+          </Show>
           <button
             onClick={() => navigate("/settings")}
             class="w-full flex items-center gap-3 px-3 py-2 text-sm font-medium text-gray-600 dark:text-gray-400 hover:bg-white dark:hover:bg-zinc-800 hover:text-gray-900 dark:hover:text-white rounded-lg transition-all shadow-sm hover:shadow"
