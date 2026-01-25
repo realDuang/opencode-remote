@@ -56,11 +56,17 @@ export function AddProjectModal(props: AddProjectModalProps) {
         <div
           class="absolute inset-0 bg-black/50 backdrop-blur-sm"
           onClick={handleClose}
+          aria-hidden="true"
         />
 
-        <div class="relative bg-white dark:bg-zinc-900 rounded-xl shadow-2xl w-full max-w-md mx-4 overflow-hidden">
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="add-project-modal-title"
+          class="relative bg-white dark:bg-zinc-900 rounded-xl shadow-2xl w-full max-w-md mx-4 overflow-hidden"
+        >
           <div class="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-zinc-800">
-            <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+            <h2 id="add-project-modal-title" class="text-lg font-semibold text-gray-900 dark:text-white">
               {t().project.addTitle}
             </h2>
             <button

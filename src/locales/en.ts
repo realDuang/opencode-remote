@@ -129,23 +129,6 @@ export interface LocaleDict {
     files: string;
   };
 
-  // Workspace
-  workspace: {
-    add: string;
-    addTitle: string;
-    inputPath: string;
-    pathHint: string;
-    browseFolder: string;
-    deleteTitle: string;
-    deleteConfirm: string;
-    sessionCount: string;
-    deleteOptionRemove: string;
-    deleteOptionDeleteAll: string;
-    pathNotFound: string;
-    alreadyExists: string;
-    deleteWorkspace: string;
-  };
-
   // Project
   project: {
     add: string;
@@ -401,23 +384,6 @@ export const en: LocaleDict = {
     hoursAgo: "{count}h ago",
     daysAgo: "{count}d ago",
     files: "{count} files",
-  },
-
-  // Workspace
-  workspace: {
-    add: "Add Workspace",
-    addTitle: "Add Workspace",
-    inputPath: "Enter workspace path",
-    pathHint: "Enter an absolute path on the server (e.g. /Users/me/project)",
-    browseFolder: "Browse",
-    deleteTitle: "Delete Workspace",
-    deleteConfirm: "Are you sure you want to delete \"{name}\"?",
-    sessionCount: "This workspace contains {count} session(s).",
-    deleteOptionRemove: "Remove from list only (keep session data)",
-    deleteOptionDeleteAll: "Delete all session history",
-    pathNotFound: "Path not found or inaccessible",
-    alreadyExists: "This workspace already exists",
-    deleteWorkspace: "Delete workspace",
   },
 
   // Project

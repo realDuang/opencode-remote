@@ -15,9 +15,14 @@ export function HideProjectModal(props: HideProjectModalProps) {
 
   const handleConfirm = async () => {
     setLoading(true);
-    await props.onConfirm();
-    setLoading(false);
-    props.onClose();
+    try {
+      await props.onConfirm();
+      props.onClose();
+    } catch (error) {
+      console.error("Failed to hide project:", error);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -26,11 +31,17 @@ export function HideProjectModal(props: HideProjectModalProps) {
         <div 
           class="absolute inset-0 bg-black/50 backdrop-blur-sm"
           onClick={props.onClose}
+          aria-hidden="true"
         />
         
-        <div class="relative bg-white dark:bg-zinc-900 rounded-xl shadow-2xl w-full max-w-md mx-4 overflow-hidden">
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="hide-project-modal-title"
+          class="relative bg-white dark:bg-zinc-900 rounded-xl shadow-2xl w-full max-w-md mx-4 overflow-hidden"
+        >
           <div class="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-zinc-800">
-            <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+            <h2 id="hide-project-modal-title" class="text-lg font-semibold text-gray-900 dark:text-white">
               {t().project.hideTitle}
             </h2>
             <button
