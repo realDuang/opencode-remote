@@ -130,23 +130,6 @@ export const zh: LocaleDict = {
     files: "{count} 文件",
   },
 
-  // Workspace
-  workspace: {
-    add: "添加工作区",
-    addTitle: "添加工作区",
-    inputPath: "输入工作区路径",
-    pathHint: "请输入服务器上的绝对路径（例如 /Users/me/project）",
-    browseFolder: "浏览",
-    deleteTitle: "删除工作区",
-    deleteConfirm: "确定要删除「{name}」吗？",
-    sessionCount: "该工作区包含 {count} 个会话。",
-    deleteOptionRemove: "仅从列表中移除（保留会话数据）",
-    deleteOptionDeleteAll: "同时删除所有会话历史",
-    pathNotFound: "路径不存在或无法访问",
-    alreadyExists: "该工作区已存在",
-    deleteWorkspace: "删除工作区",
-  },
-
   // Project
   project: {
     add: "添加项目",

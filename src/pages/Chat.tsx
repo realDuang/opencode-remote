@@ -345,6 +345,9 @@ export default function Chat() {
       (s) => s.projectID === info.projectID
     );
     
+    const currentSessionWillBeDeleted = sessionStore.current && 
+      sessionsToDelete.some(s => s.id === sessionStore.current);
+    
     for (const session of sessionsToDelete) {
       await client.deleteSession(session.id);
     }
@@ -359,10 +362,10 @@ export default function Chat() {
       projects.filter((p) => p.id !== info.projectID)
     );
     
-    if (sessionStore.current && sessionsToDelete.some(s => s.id === sessionStore.current)) {
-      const remaining = sessionStore.list.filter((s) => s.projectID !== info.projectID);
-      if (remaining.length > 0) {
-        await handleSelectSession(remaining[0].id);
+    if (currentSessionWillBeDeleted) {
+      const remainingSessions = sessionStore.list;
+      if (remainingSessions.length > 0) {
+        await handleSelectSession(remainingSessions[0].id);
       } else {
         await handleNewSession();
       }
@@ -400,6 +403,8 @@ export default function Chat() {
       if (!existingSession) {
         setSessionStore("list", (list) => [processedSession, ...list]);
       }
+      
+      await handleSelectSession(session.id);
     }
   };
 
