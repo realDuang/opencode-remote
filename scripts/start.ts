@@ -35,17 +35,25 @@ async function confirm(question: string): Promise<boolean> {
   });
 
   return new Promise((resolve) => {
-    rl.question(`${colors.yellow}? ${question} (y/N): ${colors.reset}`, (answer) => {
-      rl.close();
-      resolve(answer.toLowerCase() === "y" || answer.toLowerCase() === "yes");
-    });
+    rl.question(
+      `${colors.yellow}? ${question} (y/N): ${colors.reset}`,
+      (answer) => {
+        rl.close();
+        resolve(answer.toLowerCase() === "y" || answer.toLowerCase() === "yes");
+      },
+    );
   });
 }
 
 // Execute install command
-async function runInstallCommand(command: string, args: string[]): Promise<boolean> {
+async function runInstallCommand(
+  command: string,
+  args: string[],
+): Promise<boolean> {
   return new Promise((resolve) => {
-    console.log(`${colors.cyan}  Running: ${command} ${args.join(" ")}${colors.reset}`);
+    console.log(
+      `${colors.cyan}  Running: ${command} ${args.join(" ")}${colors.reset}`,
+    );
 
     const proc = spawn(command, args, {
       stdio: "inherit",
@@ -80,31 +88,49 @@ async function checkDependencies(): Promise<boolean> {
 
   // Check opencode
   if (!commandExists("opencode")) {
-    console.log(`${colors.red}[x] OpenCode CLI is not installed${colors.reset}`);
+    console.log(
+      `${colors.red}[x] OpenCode CLI is not installed${colors.reset}`,
+    );
 
     const shouldInstall = await confirm("Install OpenCode CLI now?");
     if (shouldInstall) {
       const success = await installOpenCode();
       if (success) {
-        console.log(`${colors.green}[ok] OpenCode CLI installed successfully${colors.reset}`);
+        console.log(
+          `${colors.green}[ok] OpenCode CLI installed successfully${colors.reset}`,
+        );
         // Re-check (PATH may need to be reloaded in some cases)
         if (!commandExists("opencode")) {
-          console.log(`${colors.yellow}[!] Installation completed, but you may need to restart your terminal for PATH to take effect${colors.reset}`);
-          console.log(`${colors.yellow}    Please restart your terminal and run bun run start again${colors.reset}`);
+          console.log(
+            `${colors.yellow}[!] Installation completed, but you may need to restart your terminal for PATH to take effect${colors.reset}`,
+          );
+          console.log(
+            `${colors.yellow}    Please restart your terminal and run bun run start again${colors.reset}`,
+          );
           return false;
         }
       } else {
-        console.log(`${colors.red}[x] Installation failed. Please install manually:${colors.reset}`);
+        console.log(
+          `${colors.red}[x] Installation failed. Please install manually:${colors.reset}`,
+        );
         if (isWindows) {
-          console.log(`${colors.cyan}  irm https://opencode.ai/install.ps1 | iex${colors.reset}`);
+          console.log(
+            `${colors.cyan}  irm https://opencode.ai/install.ps1 | iex${colors.reset}`,
+          );
         } else {
-          console.log(`${colors.cyan}  curl -fsSL https://opencode.ai/install.sh | bash${colors.reset}`);
+          console.log(
+            `${colors.cyan}  curl -fsSL https://opencode.ai/install.sh | bash${colors.reset}`,
+          );
         }
         return false;
       }
     } else {
-      console.log(`${colors.yellow}[!] OpenCode CLI is a required dependency${colors.reset}`);
-      console.log(`${colors.yellow}    Run bun run setup to install all dependencies${colors.reset}`);
+      console.log(
+        `${colors.yellow}[!] OpenCode CLI is a required dependency${colors.reset}`,
+      );
+      console.log(
+        `${colors.yellow}    Run bun run setup to install all dependencies${colors.reset}`,
+      );
       return false;
     }
   } else {
@@ -113,8 +139,12 @@ async function checkDependencies(): Promise<boolean> {
 
   // Hint about cloudflared (optional)
   if (!commandExists("cloudflared")) {
-    console.log(`${colors.yellow}[!] Cloudflared is not installed (optional, for public access feature)${colors.reset}`);
-    console.log(`${colors.yellow}    Run bun run setup to install${colors.reset}`);
+    console.log(
+      `${colors.yellow}[!] Cloudflared is not installed (optional, for public access feature)${colors.reset}`,
+    );
+    console.log(
+      `${colors.yellow}    Run bun run setup to install${colors.reset}`,
+    );
   } else {
     console.log(`${colors.green}[ok] Cloudflared is installed${colors.reset}`);
   }
@@ -128,6 +158,27 @@ async function main() {
   if (!depsOk) {
     process.exit(1);
   }
+
+  // Check if official app is built
+  const officialAppPath = path.join(
+    process.cwd(),
+    "public",
+    "opencode-app",
+    "index.html",
+  );
+  if (!fs.existsSync(officialAppPath)) {
+    console.log(
+      `${colors.yellow}[!] Official OpenCode App not built${colors.reset}`,
+    );
+    console.log(
+      `${colors.yellow}    Run 'bun run build:official-app' to enable Official UI feature${colors.reset}`,
+    );
+  } else {
+    console.log(
+      `${colors.green}[ok] Official OpenCode App is available${colors.reset}`,
+    );
+  }
+
   const authCode = generateAuthCode();
   const authCodePath = path.join(process.cwd(), ".auth-code");
 
@@ -143,7 +194,7 @@ async function main() {
   console.log("Starting OpenCode Server...");
   const opencodeProcess = spawn(
     "opencode",
-    ["serve", "--hostname", "0.0.0.0", "--port", "4096", "--cors"],
+    ["serve", "--hostname", "127.0.0.1", "--port", "4096"],
     {
       stdio: "inherit",
       env: { ...process.env },

@@ -4,3 +4,6 @@ node_modules/
 .devices.json
 nul
 .env
+
+# Official app build output
+public/opencode-app/

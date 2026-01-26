@@ -76,6 +76,18 @@ function isLocalhost(ip: string): boolean {
 }
 
 // ============================================================================
+// OpenCode Server Auth
+// ============================================================================
+
+function getOpenCodeAuthHeader(): Record<string, string> {
+  const password = process.env.OPENCODE_SERVER_PASSWORD;
+  if (!password) return {};
+  const username = process.env.OPENCODE_SERVER_USERNAME ?? "opencode";
+  const credentials = Buffer.from(`${username}:${password}`).toString("base64");
+  return { Authorization: `Basic ${credentials}` };
+}
+
+// ============================================================================
 // Vite Config
 // ============================================================================
 
@@ -85,6 +97,65 @@ export default defineConfig({
     {
       name: "custom-api-middleware",
       configureServer(server) {
+        // ====================================================================
+        // Static file serving for official OpenCode app
+        // Serves files from public/opencode-app/ directory
+        // ====================================================================
+        server.middlewares.use((req, res, next) => {
+          if (!req.url?.startsWith("/opencode-app/")) {
+            next();
+            return;
+          }
+
+          const urlPath = req.url.replace(/\?.*$/, ""); // Remove query string
+          const filePath = path.join(process.cwd(), "public", urlPath);
+
+          // Check if file exists
+          if (fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
+            const ext = path.extname(filePath).toLowerCase();
+            const mimeTypes: Record<string, string> = {
+              ".html": "text/html",
+              ".css": "text/css",
+              ".js": "application/javascript",
+              ".json": "application/json",
+              ".png": "image/png",
+              ".jpg": "image/jpeg",
+              ".jpeg": "image/jpeg",
+              ".gif": "image/gif",
+              ".svg": "image/svg+xml",
+              ".ico": "image/x-icon",
+              ".woff": "font/woff",
+              ".woff2": "font/woff2",
+              ".ttf": "font/ttf",
+              ".eot": "application/vnd.ms-fontobject",
+            };
+
+            res.setHeader(
+              "Content-Type",
+              mimeTypes[ext] || "application/octet-stream",
+            );
+            fs.createReadStream(filePath).pipe(res);
+            return;
+          }
+
+          // For directory requests (like /opencode-app/), serve index.html
+          if (urlPath.endsWith("/")) {
+            const indexPath = path.join(
+              process.cwd(),
+              "public",
+              urlPath,
+              "index.html",
+            );
+            if (fs.existsSync(indexPath)) {
+              res.setHeader("Content-Type", "text/html");
+              fs.createReadStream(indexPath).pipe(res);
+              return;
+            }
+          }
+
+          next();
+        });
+
         // ====================================================================
         // Auth: Verify code and issue device token (LOCALHOST ONLY)
         // POST /api/auth/verify
@@ -98,7 +169,11 @@ export default defineConfig({
 
           const clientIp = getClientIp(req);
           if (!isLocalhost(clientIp)) {
-            sendJson(res, { error: "Use request-access endpoint for remote devices" }, 403);
+            sendJson(
+              res,
+              { error: "Use request-access endpoint for remote devices" },
+              403,
+            );
             return;
           }
 
@@ -299,7 +374,11 @@ export default defineConfig({
             const authCodePath = path.join(process.cwd(), ".auth-code");
 
             if (!fs.existsSync(authCodePath)) {
-              sendJson(res, { success: false, error: "Auth code not found" }, 500);
+              sendJson(
+                res,
+                { success: false, error: "Auth code not found" },
+                500,
+              );
               return;
             }
 
@@ -317,7 +396,7 @@ export default defineConfig({
                 platform: device?.platform || "Unknown",
                 browser: device?.browser || "Unknown",
               },
-              clientIp
+              clientIp,
             );
 
             sendJson(res, {
@@ -335,7 +414,10 @@ export default defineConfig({
         // ====================================================================
         server.middlewares.use((req, res, next) => {
           const url = new URL(req.url || "", `http://${req.headers.host}`);
-          if (url.pathname !== "/api/auth/check-status" || req.method !== "GET") {
+          if (
+            url.pathname !== "/api/auth/check-status" ||
+            req.method !== "GET"
+          ) {
             next();
             return;
           }
@@ -368,7 +450,10 @@ export default defineConfig({
         // GET /api/admin/pending-requests
         // ====================================================================
         server.middlewares.use((req, res, next) => {
-          if (req.url !== "/api/admin/pending-requests" || req.method !== "GET") {
+          if (
+            req.url !== "/api/admin/pending-requests" ||
+            req.method !== "GET"
+          ) {
             next();
             return;
           }
@@ -432,9 +517,16 @@ export default defineConfig({
 
             const approved = deviceStore.approveRequest(requestId);
             if (approved) {
-              sendJson(res, { success: true, device: deviceStore.getDevice(approved.deviceId!) });
+              sendJson(res, {
+                success: true,
+                device: deviceStore.getDevice(approved.deviceId!),
+              });
             } else {
-              sendJson(res, { error: "Request not found or already processed" }, 404);
+              sendJson(
+                res,
+                { error: "Request not found or already processed" },
+                404,
+              );
             }
           } catch (err) {
             sendJson(res, { error: "Bad request" }, 400);
@@ -480,7 +572,11 @@ export default defineConfig({
             if (denied) {
               sendJson(res, { success: true });
             } else {
-              sendJson(res, { error: "Request not found or already processed" }, 404);
+              sendJson(
+                res,
+                { error: "Request not found or already processed" },
+                404,
+              );
             }
           } catch (err) {
             sendJson(res, { error: "Bad request" }, 400);
@@ -539,7 +635,11 @@ export default defineConfig({
 
           // Prevent revoking current device from this endpoint
           if (targetDeviceId === result.deviceId) {
-            sendJson(res, { error: "Cannot revoke current device. Use logout instead." }, 400);
+            sendJson(
+              res,
+              { error: "Cannot revoke current device. Use logout instead." },
+              400,
+            );
             return;
           }
 
@@ -589,7 +689,10 @@ export default defineConfig({
             }
 
             deviceStore.updateDevice(targetDeviceId, { name: name.trim() });
-            sendJson(res, { success: true, device: deviceStore.getDevice(targetDeviceId) });
+            sendJson(res, {
+              success: true,
+              device: deviceStore.getDevice(targetDeviceId),
+            });
           } catch {
             sendJson(res, { error: "Bad request" }, 400);
           }
@@ -600,7 +703,10 @@ export default defineConfig({
         // POST /api/devices/revoke-others
         // ====================================================================
         server.middlewares.use((req, res, next) => {
-          if (req.url !== "/api/devices/revoke-others" || req.method !== "POST") {
+          if (
+            req.url !== "/api/devices/revoke-others" ||
+            req.method !== "POST"
+          ) {
             next();
             return;
           }
@@ -692,22 +798,55 @@ export default defineConfig({
   server: {
     port: 5174,
     host: true,
-    allowedHosts: [
-      "localhost",
-      ".trycloudflare.com",
-    ],
-    proxy: {
-      "/opencode-api": {
+    allowedHosts: ["localhost", ".trycloudflare.com"],
+    proxy: (() => {
+      const authHeaders = getOpenCodeAuthHeader();
+      const baseConfig = {
         target: "http://localhost:4096",
         changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/opencode-api/, ""),
-      },
-      "/opencode-api/global/event": {
-        target: "http://localhost:4096",
-        changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/opencode-api/, ""),
-        timeout: 0,
-      },
-    },
+        headers: authHeaders,
+      };
+      return {
+        // Proxy for our custom API client (used by simple UI)
+        "/opencode-api": {
+          ...baseConfig,
+          rewrite: (path: string) => path.replace(/^\/opencode-api/, ""),
+        },
+        "/opencode-api/global/event": {
+          ...baseConfig,
+          rewrite: (path: string) => path.replace(/^\/opencode-api/, ""),
+          timeout: 0,
+        },
+        // Proxy for Official OpenCode App (uses direct API paths)
+        // SSE endpoints need special timeout handling
+        "/global/event": { ...baseConfig, timeout: 0 },
+        "/event": { ...baseConfig, timeout: 0 },
+        // All OpenCode API paths used by Official App
+        "/global": baseConfig,
+        "/session": baseConfig,
+        "/project": baseConfig,
+        "/config": baseConfig,
+        "/pty": baseConfig,
+        "/experimental": baseConfig,
+        "/provider": baseConfig,
+        "/permission": baseConfig,
+        "/question": baseConfig,
+        "/mcp": baseConfig,
+        "/tui": baseConfig,
+        "/path": baseConfig,
+        "/vcs": baseConfig,
+        "/command": baseConfig,
+        "/agent": baseConfig,
+        "/skill": baseConfig,
+        "/lsp": baseConfig,
+        "/formatter": baseConfig,
+        "/auth": baseConfig,
+        "/instance": baseConfig,
+        "/doc": baseConfig,
+        "/log": baseConfig,
+        "/file": baseConfig,
+        "/find": baseConfig,
+      };
+    })(),
   },
 });
