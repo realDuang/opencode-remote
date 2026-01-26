@@ -2,6 +2,7 @@ dist/
 node_modules/
 .auth-code
 .devices.json
+.remote-storage.json
 nul
 .env
 

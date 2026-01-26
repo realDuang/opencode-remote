@@ -7,6 +7,8 @@ import os from "os";
 import type { IncomingMessage, ServerResponse } from "http";
 import { tunnelManager } from "./scripts/tunnel-manager";
 import { deviceStore, type DeviceInfo } from "./scripts/device-store";
+import { storageStore } from "./scripts/storage-store";
+
 
 // ============================================================================
 // Helper Functions
@@ -794,13 +796,79 @@ export default defineConfig({
             sendJson(res, { error: error.message }, 500);
           }
         });
+
+        // ====================================================================
+        // Storage: Persisted storage sync
+        // GET/POST/DELETE /api/storage/*
+        // ====================================================================
+        server.middlewares.use(async (req, res, next) => {
+          if (!req.url?.startsWith("/api/storage")) {
+            next();
+            return;
+          }
+
+          const token = extractBearerToken(req);
+          if (!token) {
+            sendJson(res, { error: "Unauthorized" }, 401);
+            return;
+          }
+
+          const result = deviceStore.verifyToken(token);
+          if (!result.valid) {
+            sendJson(res, { error: "Invalid token" }, 401);
+            return;
+          }
+
+          try {
+            if (req.url === "/api/storage" && req.method === "GET") {
+              sendJson(res, storageStore.getAll());
+              return;
+            }
+
+            const match = req.url.match(/^\/api\/storage\/(.+)$/);
+            if (!match) {
+              sendJson(res, { error: "Not found" }, 404);
+              return;
+            }
+
+            const key = decodeURIComponent(match[1]);
+
+            if (req.method === "GET") {
+              const value = storageStore.getItem(key);
+              sendJson(res, { key, value });
+              return;
+            }
+
+            if (req.method === "POST") {
+              const { value } = await parseBody(req);
+              storageStore.setItem(key, value);
+              sendJson(res, { success: true });
+              return;
+            }
+
+            if (req.method === "DELETE") {
+              storageStore.removeItem(key);
+              sendJson(res, { success: true });
+              return;
+            }
+
+            sendJson(res, { error: "Method not allowed" }, 405);
+          } catch (error: any) {
+            console.error("[Storage API Error]", error);
+            sendJson(res, { error: error.message }, 500);
+          }
+        });
       },
     },
+
   ],
   server: {
     port: 5174,
     host: true,
     allowedHosts: ["localhost", ".trycloudflare.com"],
+    watch: {
+      ignored: ["**/.remote-storage.json", "**/.auth-code", "**/.devices.json"],
+    },
     proxy: (() => {
       const authHeaders = getOpenCodeAuthHeader();
       const baseConfig = {
