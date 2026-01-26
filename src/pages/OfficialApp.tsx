@@ -13,6 +13,8 @@ export default function OfficialApp() {
   const { t } = useI18n();
   const [loading, setLoading] = createSignal(true);
   const [error, setError] = createSignal<string | null>(null);
+  const [storageReady, setStorageReady] = createSignal(false);
+  const [iframeSrc, setIframeSrc] = createSignal<string | null>(null);
 
   createEffect(() => {
     if (!Auth.isAuthenticated()) {
@@ -21,9 +23,190 @@ export default function OfficialApp() {
     }
   });
 
+  // Sync storage from server BEFORE loading iframe
+  // Since parent and iframe share localStorage (same origin), we populate it first
+  createEffect(() => {
+    const token = Auth.getToken();
+    if (!token) return;
+
+    console.log("[OfficialApp] Syncing storage from server...");
+    fetch("/api/storage", {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((res) => res.json())
+      .then(async (data) => {
+        if (data && typeof data === "object" && !data.error) {
+          const keys = Object.keys(data);
+          console.log("[OfficialApp] Received", keys.length, "keys from server");
+          
+          // Check the critical project key
+          const projectKey = "opencode.global.dat:globalSync.project";
+          if (data[projectKey]) {
+            console.log("[OfficialApp] Project data from API:", data[projectKey].substring(0, 200));
+          }
+          
+          // Write all keys to localStorage
+          Object.entries(data).forEach(([key, value]) => {
+            if (typeof value === "string") {
+              localStorage.setItem(key, value);
+            }
+          });
+          
+          // Verify the write
+          const writtenValue = localStorage.getItem(projectKey);
+          console.log("[OfficialApp] After write, localStorage has project data:", writtenValue ? "yes" : "no");
+          console.log("[OfficialApp] Storage synced:", keys.length, "keys");
+          
+          // Force a small delay to ensure localStorage writes are flushed
+          // This helps because the iframe's JS might start executing in the same tick
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
+        console.log("[OfficialApp] Setting storageReady to true");
+        setStorageReady(true);
+        // Set iframe src with timestamp to ensure fresh load
+        setIframeSrc(`/opencode-app/?_t=${Date.now()}`);
+      })
+      .catch((err) => {
+        console.error("[OfficialApp] Failed to sync storage:", err);
+        setStorageReady(true); // Continue anyway
+        setIframeSrc(`/opencode-app/?_t=${Date.now()}`);
+      });
+  });
+
+  // Intercept localStorage writes and sync to server
+  // Also poll for changes made by iframe (since we can't intercept iframe's localStorage calls)
+  createEffect(() => {
+    if (!storageReady()) return;
+
+    const token = Auth.getToken();
+    if (!token) return;
+
+    const originalSetItem = localStorage.setItem.bind(localStorage);
+    const originalRemoveItem = localStorage.removeItem.bind(localStorage);
+
+    // Track last known values to detect changes
+    const lastKnownValues = new Map<string, string>();
+    
+    // Initialize with current values
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key?.startsWith("opencode.")) {
+        const value = localStorage.getItem(key);
+        if (value) lastKnownValues.set(key, value);
+      }
+    }
+
+    // Sync a key to server
+    const syncToServer = (key: string, value: string) => {
+      logger.debug("[OfficialApp] Syncing to server:", key, "length:", value.length);
+      fetch(`/api/storage/${encodeURIComponent(key)}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ value }),
+      }).catch((err) => logger.error("[OfficialApp] Failed to sync:", err));
+    };
+
+    // Intercept parent window localStorage writes
+    localStorage.setItem = function (key: string, value: string) {
+      originalSetItem(key, value);
+      if (key.startsWith("opencode.")) {
+        lastKnownValues.set(key, value);
+        syncToServer(key, value);
+      }
+    };
+
+    localStorage.removeItem = function (key: string) {
+      originalRemoveItem(key);
+      if (key.startsWith("opencode.")) {
+        lastKnownValues.delete(key);
+        fetch(`/api/storage/${encodeURIComponent(key)}`, {
+          method: "DELETE",
+          headers: { Authorization: `Bearer ${token}` },
+        }).catch((err) => logger.error("[OfficialApp] Failed to sync removeItem:", err));
+      }
+    };
+
+    // Poll for changes made by iframe (every 2 seconds)
+    const pollInterval = setInterval(() => {
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (!key?.startsWith("opencode.")) continue;
+        
+        const currentValue = localStorage.getItem(key);
+        if (!currentValue) continue;
+        
+        const lastValue = lastKnownValues.get(key);
+        if (currentValue !== lastValue) {
+          logger.debug("[OfficialApp] Detected change in:", key);
+          lastKnownValues.set(key, currentValue);
+          syncToServer(key, currentValue);
+        }
+      }
+      
+      // Check for deleted keys
+      for (const key of lastKnownValues.keys()) {
+        if (localStorage.getItem(key) === null) {
+          logger.debug("[OfficialApp] Detected deletion of:", key);
+          lastKnownValues.delete(key);
+          fetch(`/api/storage/${encodeURIComponent(key)}`, {
+            method: "DELETE",
+            headers: { Authorization: `Bearer ${token}` },
+          }).catch((err) => logger.error("[OfficialApp] Failed to sync delete:", err));
+        }
+      }
+    }, 2000);
+
+    onCleanup(() => {
+      localStorage.setItem = originalSetItem;
+      localStorage.removeItem = originalRemoveItem;
+      clearInterval(pollInterval);
+    });
+  });
+
   function handleIframeLoad() {
     setLoading(false);
     logger.debug("[OfficialApp] Iframe loaded successfully");
+    
+    // Debug: Check if iframe can access localStorage
+    try {
+      const iframe = document.querySelector('iframe');
+      if (iframe?.contentWindow) {
+        const iframeStorage = iframe.contentWindow.localStorage;
+        
+        // Check project data (the critical key for showing projects)
+        const projectKey = "opencode.global.dat:globalSync.project";
+        const projectData = iframeStorage.getItem(projectKey);
+        console.log("[OfficialApp] Iframe localStorage project data:", projectData ? "exists" : "MISSING");
+        if (projectData) {
+          try {
+            const parsed = JSON.parse(projectData);
+            console.log("[OfficialApp] Iframe project count:", parsed?.value?.length ?? 0);
+          } catch (e) {
+            console.log("[OfficialApp] Failed to parse project data");
+          }
+        }
+        
+        // Check server data
+        const serverKey = "opencode.global.dat:server";
+        const serverData = iframeStorage.getItem(serverKey);
+        console.log("[OfficialApp] Iframe localStorage server data:", serverData ? "exists" : "MISSING");
+        
+        // List all opencode keys
+        const allKeys: string[] = [];
+        for (let i = 0; i < iframeStorage.length; i++) {
+          const key = iframeStorage.key(i);
+          if (key?.startsWith("opencode.")) {
+            allKeys.push(key);
+          }
+        }
+        console.log("[OfficialApp] All opencode keys in iframe:", allKeys);
+      }
+    } catch (err) {
+      console.error("[OfficialApp] Cannot access iframe localStorage:", err);
+    }
   }
 
   function handleIframeError() {
@@ -134,10 +317,10 @@ export default function OfficialApp() {
           </div>
         </Show>
 
-        {/* Iframe for official app */}
-        <Show when={!error()}>
+        {/* Iframe for official app - only load after storage is synced */}
+        <Show when={!error() && iframeSrc()}>
           <iframe
-            src="/opencode-app/"
+            src={iframeSrc()!}
             class="w-full h-full border-0"
             onLoad={handleIframeLoad}
             onError={handleIframeError}
