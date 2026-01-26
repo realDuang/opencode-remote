@@ -287,9 +287,12 @@ export default function EntryPage() {
 
   return (
     <div class="flex flex-col min-h-screen bg-gray-50/50 dark:bg-zinc-950 font-sans text-gray-900 dark:text-gray-100">
-      <div class="absolute top-4 right-4">
-        <LanguageSwitcher />
-      </div>
+      {/* Language switcher for remote login page (non-local mode) */}
+      <Show when={!isLocal()}>
+        <div class="absolute top-4 right-4 z-20">
+          <LanguageSwitcher />
+        </div>
+      </Show>
 
       {/* Loading state */}
       <Show when={checking()}>
@@ -450,8 +453,11 @@ export default function EntryPage() {
             <div class="flex items-center gap-2">
               <h1 class="font-semibold text-lg">{t().remote.title}</h1>
             </div>
-            <div class="text-xs font-medium px-2 py-1 rounded bg-gray-100 dark:bg-zinc-800 text-gray-500 dark:text-gray-400">
-              OpenCode Remote
+            <div class="flex items-center gap-3">
+              <LanguageSwitcher />
+              <div class="text-xs font-medium px-2 py-1 rounded bg-gray-100 dark:bg-zinc-800 text-gray-500 dark:text-gray-400">
+                OpenCode Remote
+              </div>
             </div>
           </header>
 

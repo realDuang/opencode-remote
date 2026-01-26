@@ -33,13 +33,14 @@ function getBrowserLocale(): LocaleCode {
   return "en";
 }
 
-// Get saved locale from localStorage or use browser default
+// Get saved locale from localStorage or use English as default
 function getSavedLocale(): LocaleCode {
   const saved = localStorage.getItem("locale") as LocaleCode | null;
   if (saved && dictionaries[saved]) {
     return saved;
   }
-  return getBrowserLocale();
+  // Default to English instead of browser language
+  return "en";
 }
 
 // Save locale to localStorage
