@@ -159,8 +159,8 @@ export namespace Session {
     id: string;
     slug?: string;
     projectID?: string;
-    directory: string;           // 项目目录路径（用于分组）
-    parentID?: string;           // 父会话 ID
+    directory: string;           // Project directory path (for grouping)
+    parentID?: string;           // Parent session ID
     title?: string;
     version?: string;
     time: {

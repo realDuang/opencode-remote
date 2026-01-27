@@ -182,7 +182,7 @@ export function SessionTurn(props: SessionTurnProps) {
   // Filter parts for display
   const filterParts = (allParts: MessageV2.Part[], messageRole: string) => {
     const filtered = allParts.filter((x, index) => {
-      // 过滤掉所有 step-start，模型信息将显示在标题栏
+      // Filter out all step-start, model info will be shown in header
       if (x.type === "step-start") return false;
       if (x.type === "snapshot") return false;
       if (x.type === "patch") return false;

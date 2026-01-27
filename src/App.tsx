@@ -1,8 +1,9 @@
-import { Router, Route } from "@solidjs/router";
-import { createEffect, createSignal, Show } from "solid-js";
+import { Router, HashRouter, Route, useNavigate, Navigate } from "@solidjs/router";
+import { createEffect, onMount, type ParentComponent } from "solid-js";
 import { Auth } from "./lib/auth";
 import { I18nProvider } from "./lib/i18n";
 import { logger } from "./lib/logger";
+import { initElectronTitleBar, isElectron } from "./lib/platform";
 import "./lib/theme";
 import EntryPage from "./pages/EntryPage";
 import Chat from "./pages/Chat";
@@ -10,71 +11,72 @@ import Settings from "./pages/Settings";
 import Devices from "./pages/Devices";
 import { AccessRequestNotification } from "./components/AccessRequestNotification";
 
+// Use HashRouter for Electron (file:// protocol) and regular Router for web
+// HashRouter uses URL hashes (#/path) which work with file:// protocol
+const AppRouter: ParentComponent = (props) => {
+  // In production Electron, use HashRouter for file:// protocol compatibility
+  if (isElectron() && window.location.protocol === "file:") {
+    return <HashRouter>{props.children}</HashRouter>;
+  }
+  return <Router>{props.children}</Router>;
+};
+
+// Redirect component for /login route
+function LoginRedirect() {
+  return <Navigate href="/" />;
+}
+
+// Redirect component for /remote route
+function RemoteRedirect() {
+  if (isElectron()) {
+    logger.debug("[Remote Route] Electron host, redirecting to /");
+    return <Navigate href="/" />;
+  }
+  // Web clients: redirect to chat if authenticated, else to /
+  if (Auth.isAuthenticated()) {
+    logger.debug("[Remote Route] Web client authenticated, redirecting to /chat");
+    return <Navigate href="/chat" />;
+  }
+  logger.debug("[Remote Route] Web client not authenticated, redirecting to /");
+  return <Navigate href="/" />;
+}
+
+// Protected chat route component
+function ChatRoute() {
+  const navigate = useNavigate();
+
+  createEffect(() => {
+    if (!Auth.isAuthenticated()) {
+      logger.debug("❌ Not authenticated, redirecting to entry");
+      navigate("/", { replace: true });
+    } else {
+      logger.debug("✅ Authenticated, showing chat");
+    }
+  });
+
+  return <Chat />;
+}
+
 function App() {
   logger.debug("🎨 App component rendering");
   logger.debug("🔐 Is authenticated:", Auth.isAuthenticated());
 
+  // Initialize Electron title bar safe area on mount
+  onMount(() => {
+    initElectronTitleBar();
+  });
+
   return (
     <I18nProvider>
       <AccessRequestNotification />
-      <Router>
+      <AppRouter>
         <Route path="/" component={EntryPage} />
-        <Route
-          path="/login"
-          component={() => {
-            window.location.href = "/";
-            return null;
-          }}
-        />
-        <Route
-          path="/remote"
-          component={() => {
-            // Redirect /remote to / (EntryPage handles remote config for localhost)
-            // Remote users should not access this route at all
-            const [isLocal, setIsLocal] = createSignal<boolean | null>(null);
-
-            createEffect(() => {
-              Auth.isLocalAccess().then((local) => {
-                setIsLocal(local);
-                if (!local) {
-                  // Remote users: redirect to chat (deny access to config)
-                  logger.debug("[Remote Route] Remote user, redirecting to /chat");
-                  window.location.href = "/chat";
-                } else {
-                  // Localhost users: redirect to / (EntryPage shows config)
-                  logger.debug("[Remote Route] Localhost user, redirecting to /");
-                  window.location.href = "/";
-                }
-              });
-            });
-
-            // Show loading while checking
-            return (
-              <Show when={isLocal() === null}>
-                <div class="min-h-screen flex items-center justify-center bg-zinc-950">
-                  <div class="w-6 h-6 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin"></div>
-                </div>
-              </Show>
-            );
-          }}
-        />
+        <Route path="/login" component={LoginRedirect} />
+        <Route path="/remote" component={RemoteRedirect} />
         <Route path="/settings" component={Settings} />
         <Route path="/devices" component={Devices} />
-        <Route
-          path="/chat"
-          component={() => {
-            createEffect(() => {
-              if (!Auth.isAuthenticated()) {
-                logger.debug("❌ Not authenticated, redirecting to entry");
-                window.location.href = "/";
-              } else {
-                logger.debug("✅ Authenticated, showing chat");
-              }
-            });
-            return <Chat />;
-          }}
-        />
-      </Router>
+        <Route path="/chat" component={ChatRoute} />
+      </AppRouter>
     </I18nProvider>
   );
 }

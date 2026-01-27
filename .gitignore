@@ -1,6 +1,38 @@
-dist/
+# Dependencies
 node_modules/
+
+# Build outputs
+dist/
+/out/
+/release/
+
+# Bundled resources (downloaded binaries)
+/resources/
+
+# Environment and secrets
+.env
+.env.local
+.env.*.local
+
+# Auth files
 .auth-code
 .devices.json
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+.halo/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Temporary files
 nul
-.env
+*.tmp

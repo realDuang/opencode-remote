@@ -26,15 +26,15 @@ class TunnelManager {
     };
 
     try {
-      // 启动 cloudflared tunnel
+      // Start cloudflared tunnel
       this.process = spawn("cloudflared", ["tunnel", "--url", `http://localhost:${port}`]);
 
-      // 监听输出以获取 tunnel URL (cloudflared 输出在 stderr)
+      // Listen to output to get tunnel URL (cloudflared outputs to stderr)
       const handleOutput = (data: Buffer) => {
         const output = data.toString();
         console.log("[Tunnel]", output);
 
-        // 匹配 cloudflared 输出的 URL
+        // Match cloudflared output URL
         const urlMatch = output.match(/https?:\/\/[^\s]+\.trycloudflare\.com/);
         if (urlMatch) {
           this.info = {

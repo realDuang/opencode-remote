@@ -1,0 +1,33 @@
+appId: com.opencode.remote
+productName: OpenCode Remote
+directories:
+  output: release
+  buildResources: resources
+files:
+  - out/**/*
+  - package.json
+extraResources:
+  - from: resources/bin
+    to: bin
+    filter:
+      - "**/*"
+  - from: resources/cloudflared
+    to: cloudflared
+    filter:
+      - "**/*"
+extraMetadata:
+  main: out/main/index.js
+mac:
+  target: dmg
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+dmg:
+  writeUpdateInfo: false

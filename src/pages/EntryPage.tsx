@@ -4,6 +4,8 @@ import { Auth } from "../lib/auth";
 import { useI18n } from "../lib/i18n";
 import { LanguageSwitcher } from "../components/LanguageSwitcher";
 import { logger } from "../lib/logger";
+import { isElectron } from "../lib/platform";
+import { systemAPI, tunnelAPI } from "../lib/electron-api";
 
 interface TunnelInfo {
   url: string;
@@ -18,7 +20,8 @@ export default function EntryPage() {
 
   // Access detection states
   const [checking, setChecking] = createSignal(true);
-  const [isLocal, setIsLocal] = createSignal(false);
+  // isHost: true only in Electron (host mode), false for all Web clients
+  const [isHost, setIsHost] = createSignal(false);
 
   // Login form states (for remote access)
   const [code, setCode] = createSignal("");
@@ -48,19 +51,20 @@ export default function EntryPage() {
   onMount(async () => {
     logger.debug("[EntryPage] Mounted, checking access type...");
 
-    // Check if local access first
-    const localAccess = await Auth.isLocalAccess();
-    logger.debug("[EntryPage] Is local access:", localAccess);
-    setIsLocal(localAccess);
+    // Host mode: only Electron is considered host
+    // All Web clients (including localhost) are treated as clients
+    const hostMode = isElectron();
+    logger.debug("[EntryPage] Is host (Electron):", hostMode);
+    setIsHost(hostMode);
 
-    // For localhost users, always show config page (don't auto-redirect to chat)
-    if (localAccess) {
+    // For Electron (host), always show config page (don't auto-redirect to chat)
+    if (hostMode) {
       setChecking(false);
       loadLocalModeData();
       return;
     }
 
-    // For remote users, check if already authenticated
+    // For Web clients, check if already authenticated
     const hasValidToken = await Auth.checkDeviceToken();
     if (hasValidToken) {
       logger.debug("[EntryPage] Already authenticated, redirecting to chat");
@@ -78,12 +82,26 @@ export default function EntryPage() {
   });
 
   const loadLocalModeData = async () => {
-    // Get system info
+    // Get system info - different sources for Electron vs Browser
     try {
-      const res = await fetch("/api/system/info");
-      const data = await res.json();
-      if (data.localIp) setLocalIp(data.localIp);
-      if (data.port) setPort(data.port);
+      if (isElectron()) {
+        // Electron: use IPC APIs for local IP
+        const localIpResult = await systemAPI.getLocalIp();
+        if (localIpResult) setLocalIp(localIpResult);
+
+        // For port, use the current window's port (Vite dev server port)
+        // This is the port that remote users should connect to
+        const currentPort = window.location.port;
+        if (currentPort) {
+          setPort(parseInt(currentPort, 10));
+        }
+      } else {
+        // Browser: use HTTP API
+        const res = await fetch("/api/system/info");
+        const data = await res.json();
+        if (data.localIp) setLocalIp(data.localIp);
+        if (data.port) setPort(data.port);
+      }
     } catch (err) {
       logger.error("[EntryPage] Failed to get system info:", err);
     }
@@ -107,10 +125,20 @@ export default function EntryPage() {
 
   const checkTunnelStatus = async () => {
     try {
-      const res = await fetch("/api/tunnel/status");
-      const info = await res.json();
-      setTunnelInfo(info);
-      setTunnelEnabled(info.status === "running");
+      if (isElectron()) {
+        // Electron: use IPC API
+        const info = await tunnelAPI.getStatus();
+        if (info) {
+          setTunnelInfo(info);
+          setTunnelEnabled(info.status === "running");
+        }
+      } else {
+        // Browser: use HTTP API
+        const res = await fetch("/api/tunnel/status");
+        const info = await res.json();
+        setTunnelInfo(info);
+        setTunnelEnabled(info.status === "running");
+      }
     } catch (error) {
       logger.error("[EntryPage] Failed to check tunnel status:", error);
     }
@@ -202,15 +230,31 @@ export default function EntryPage() {
   const startTunnel = async () => {
     setTunnelLoading(true);
     try {
-      const res = await fetch("/api/tunnel/start", { method: "POST" });
-      const info = await res.json();
+      let info: TunnelInfo;
+
+      if (isElectron()) {
+        // Electron: use IPC API
+        const result = await tunnelAPI.start(port());
+        info = result || { url: "", status: "error", error: t().remote.startFailed };
+      } else {
+        // Browser: use HTTP API
+        const res = await fetch("/api/tunnel/start", { method: "POST" });
+        info = await res.json();
+      }
+
       setTunnelInfo(info);
       setTunnelEnabled(true);
 
       if (info.status === "starting") {
         const pollInterval = setInterval(async () => {
-          const statusRes = await fetch("/api/tunnel/status");
-          const statusInfo = await statusRes.json();
+          let statusInfo: TunnelInfo;
+          if (isElectron()) {
+            const result = await tunnelAPI.getStatus();
+            statusInfo = result || { url: "", status: "stopped" };
+          } else {
+            const statusRes = await fetch("/api/tunnel/status");
+            statusInfo = await statusRes.json();
+          }
           setTunnelInfo(statusInfo);
 
           if (statusInfo.status === "running" || statusInfo.status === "error") {
@@ -240,7 +284,11 @@ export default function EntryPage() {
   const stopTunnel = async () => {
     setTunnelLoading(true);
     try {
-      await fetch("/api/tunnel/stop", { method: "POST" });
+      if (isElectron()) {
+        await tunnelAPI.stop();
+      } else {
+        await fetch("/api/tunnel/stop", { method: "POST" });
+      }
       setTunnelInfo({ url: "", status: "stopped" });
       setTunnelEnabled(false);
     } catch (error) {
@@ -286,10 +334,10 @@ export default function EntryPage() {
   // =========================================================================
 
   return (
-    <div class="flex flex-col min-h-screen bg-gray-50/50 dark:bg-zinc-950 font-sans text-gray-900 dark:text-gray-100">
-      {/* Language switcher for remote login page (non-local mode) */}
-      <Show when={!isLocal()}>
-        <div class="absolute top-4 right-4 z-20">
+    <div class="flex flex-col min-h-screen bg-gray-50/50 dark:bg-zinc-950 font-sans text-gray-900 dark:text-gray-100 electron-safe-top">
+      {/* Language switcher for remote login page (non-host mode) */}
+      <Show when={!isHost()}>
+        <div class="absolute top-4 right-4 z-20" style={{ top: "calc(1rem + var(--electron-title-bar-height, 0px))" }}>
           <LanguageSwitcher />
         </div>
       </Show>
@@ -305,7 +353,7 @@ export default function EntryPage() {
       </Show>
 
       {/* Remote access: Show login form or approval status */}
-      <Show when={!checking() && !isLocal()}>
+      <Show when={!checking() && !isHost()}>
         <div class="flex-1 flex items-center justify-center p-4">
           <div class="w-full max-w-md p-8 bg-white dark:bg-zinc-800 rounded-lg shadow-md transition-all duration-300">
             <Show when={!waitingApproval()} fallback={
@@ -445,8 +493,8 @@ export default function EntryPage() {
         </div>
       </Show>
 
-      {/* Local access: Show remote access config + enter chat button */}
-      <Show when={!checking() && isLocal()}>
+      {/* Host mode (Electron): Show remote access config + enter chat button */}
+      <Show when={!checking() && isHost()}>
         <div class="flex-1 overflow-y-auto">
           {/* Header */}
           <header class="sticky top-0 z-10 backdrop-blur-md bg-white/70 dark:bg-zinc-900/70 border-b border-gray-200 dark:border-zinc-800 px-4 h-14 flex items-center justify-between">

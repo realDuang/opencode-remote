@@ -134,6 +134,23 @@ class DeviceStore {
     this.revokedSet = new Set(this.data.revokedTokens);
   }
 
+  /**
+   * Reload data from disk
+   * Used to sync with Electron side in dev mode
+   */
+  reload(): void {
+    this.data = this.load();
+    this.revokedSet = new Set(this.data.revokedTokens);
+  }
+
+  /**
+   * Ensure data is fresh (call before read operations)
+   */
+  private ensureFresh(): void {
+    // In dev mode, reload before each read to ensure sync with Electron side
+    this.reload();
+  }
+
   private load(): DeviceStoreData {
     if (fs.existsSync(DEVICES_FILE)) {
       try {
@@ -181,15 +198,18 @@ class DeviceStore {
   }
 
   addDevice(device: DeviceInfo): void {
+    this.ensureFresh();
     this.data.devices[device.id] = device;
     this.save();
   }
 
   getDevice(deviceId: string): DeviceInfo | undefined {
+    this.ensureFresh();
     return this.data.devices[deviceId];
   }
 
   updateDevice(deviceId: string, updates: Partial<DeviceInfo>): void {
+    this.ensureFresh();
     if (this.data.devices[deviceId]) {
       this.data.devices[deviceId] = { ...this.data.devices[deviceId], ...updates };
       this.save();
@@ -197,6 +217,7 @@ class DeviceStore {
   }
 
   updateLastSeen(deviceId: string, ip: string): void {
+    this.ensureFresh();
     if (this.data.devices[deviceId]) {
       this.data.devices[deviceId].lastSeenAt = Date.now();
       this.data.devices[deviceId].ip = ip;
@@ -205,10 +226,12 @@ class DeviceStore {
   }
 
   listDevices(): DeviceInfo[] {
+    this.ensureFresh();
     return Object.values(this.data.devices).sort((a, b) => b.lastSeenAt - a.lastSeenAt);
   }
 
   removeDevice(deviceId: string): boolean {
+    this.ensureFresh();
     if (this.data.devices[deviceId]) {
       delete this.data.devices[deviceId];
       this.save();
@@ -222,10 +245,12 @@ class DeviceStore {
   // -------------------------------------------------------------------------
 
   generateToken(deviceId: string): string {
+    this.ensureFresh();
     return generateJWT({ deviceId }, this.data.jwtSecret, 365);
   }
 
   verifyToken(token: string): { valid: boolean; deviceId?: string } {
+    this.ensureFresh();
     // Check if token is revoked
     if (this.revokedSet.has(token)) {
       return { valid: false };
@@ -246,6 +271,7 @@ class DeviceStore {
   }
 
   revokeToken(token: string): void {
+    this.ensureFresh();
     if (!this.revokedSet.has(token)) {
       this.revokedSet.add(token);
       this.data.revokedTokens.push(token);
@@ -261,13 +287,17 @@ class DeviceStore {
   }
 
   revokeAllExcept(keepDeviceId: string): number {
+    this.ensureFresh();
     const deviceIds = Object.keys(this.data.devices);
     let count = 0;
     for (const id of deviceIds) {
       if (id !== keepDeviceId) {
-        this.removeDevice(id);
+        delete this.data.devices[id];
         count++;
       }
+    }
+    if (count > 0) {
+      this.save();
     }
     return count;
   }
@@ -283,6 +313,7 @@ class DeviceStore {
   }
 
   createPendingRequest(device: { name: string; platform: string; browser: string }, ip: string): PendingRequest {
+    this.ensureFresh();
     this.cleanupExpiredRequests();
 
     const request: PendingRequest = {
@@ -299,6 +330,7 @@ class DeviceStore {
   }
 
   getPendingRequest(requestId: string): PendingRequest | undefined {
+    this.ensureFresh();
     const request = this.data.pendingRequests[requestId];
     if (!request) return undefined;
 
@@ -311,6 +343,7 @@ class DeviceStore {
   }
 
   listPendingRequests(): PendingRequest[] {
+    this.ensureFresh();
     this.cleanupExpiredRequests();
     return Object.values(this.data.pendingRequests)
       .filter(r => r.status === "pending")
@@ -318,6 +351,7 @@ class DeviceStore {
   }
 
   approveRequest(requestId: string): PendingRequest | undefined {
+    this.ensureFresh();
     const request = this.data.pendingRequests[requestId];
     if (!request || request.status !== "pending") return undefined;
 
@@ -340,18 +374,22 @@ class DeviceStore {
       isHost: false,
     };
 
-    this.addDevice(deviceInfo);
+    // Add device directly to current data, don't call addDevice (avoid data loss from ensureFresh)
+    this.data.devices[deviceInfo.id] = deviceInfo;
 
+    // Update request status
     request.status = "approved";
     request.resolvedAt = Date.now();
     request.deviceId = deviceId;
     request.token = token;
 
+    // Save all changes at once
     this.save();
     return request;
   }
 
   denyRequest(requestId: string): PendingRequest | undefined {
+    this.ensureFresh();
     const request = this.data.pendingRequests[requestId];
     if (!request || request.status !== "pending") return undefined;
 
@@ -407,6 +445,16 @@ class DeviceStore {
       return true;
     }
     return false;
+  }
+
+  /**
+   * Generate 6-digit access code
+   * Uses hash of JWT secret to generate a stable code
+   */
+  getAccessCode(): string {
+    const hash = crypto.createHash("sha256").update(this.data.jwtSecret).digest("hex");
+    const num = parseInt(hash.substring(0, 12), 16) % 1000000;
+    return num.toString().padStart(6, "0");
   }
 }
 

@@ -26,30 +26,36 @@ AI coding agents like OpenCode need to run on machines with:
 
 But what if you want to **use your phone on the couch**, **pair program from an iPad**, or **access your dev machine from anywhere in the world**?
 
-**OpenCode Remote** solves this by providing a web interface that works from any device with a browser.
+**OpenCode Remote** solves this by providing a desktop app and web interface that works from any device with a browser.
 
 ### Key Features
 
 | Feature | Description |
 |---------|-------------|
-| **Remote Access from Any Terminal** | Access OpenCode through a clean web UI from phones, tablets, laptops — any device with a browser |
+| **Desktop App** | Native Electron app for macOS and Windows with bundled OpenCode and Cloudflare Tunnel |
+| **Remote Access from Any Device** | Access OpenCode through a clean web UI from phones, tablets, laptops — any device with a browser |
 | **One-Click Public Tunnel** | Enable internet access with a single toggle using Cloudflare Tunnel — no port forwarding or VPN needed |
 | **LAN Access** | Instantly accessible from any device on your local network |
 | **QR Code Connection** | Scan to connect from mobile devices — no typing URLs |
-| **Secure by Default** | Random 6-digit access codes for each session |
+| **Device Management** | Manage connected devices, rename them, or revoke access |
+| **Secure by Default** | Device-based authentication with secure token storage |
 | **Real-time Streaming** | Live message streaming via Server-Sent Events |
-| **Full Feature Parity** | All OpenCode features work seamlessly through the web UI |
 
 ---
 
 ## Quick Start
 
-### Prerequisites
+### Option 1: Desktop App (Recommended)
 
-- [Bun](https://bun.sh) (recommended) or Node.js 18+
-- [OpenCode CLI](https://opencode.ai) installed
+Download the latest release for your platform:
 
-### Installation
+- **macOS (Apple Silicon)**: `OpenCode Remote-x.x.x-arm64.dmg`
+- **macOS (Intel)**: `OpenCode Remote-x.x.x-x64.dmg`
+- **Windows**: `OpenCode Remote-x.x.x-setup.exe`
+
+The desktop app bundles everything you need — no additional installation required.
+
+### Option 2: Development Mode
 
 ```bash
 # Clone the repository
@@ -59,32 +65,12 @@ cd opencode-remote
 # Install dependencies
 bun install
 
-# Start the application
-bun run start
-```
+# Download bundled binaries
+bun run update:opencode
+bun run update:cloudflared
 
-### What Happens
-
-1. A random **6-digit access code** is generated and displayed in terminal
-2. OpenCode server starts on port `4096`
-3. Web UI starts on port `5174`
-4. Open `http://localhost:5174` and enter the access code
-
-```
-============================================================
-Starting OpenCode Remote
-============================================================
-
-Access Code: 847291
-
-Starting OpenCode Server...
-Starting Web UI...
-
-============================================================
-All services started!
-Web UI: http://localhost:5174
-Use code: 847291
-============================================================
+# Start in development mode
+bun run dev
 ```
 
 ---
@@ -95,9 +81,10 @@ Use code: 847291
 
 Access from any device on your local network:
 
-1. Find your machine's IP address (shown in the Remote Access page)
-2. Open `http://<your-ip>:5174` from another device
-3. Enter the 6-digit access code
+1. Open the desktop app and go to the **Remote Access** section
+2. Find your machine's IP address displayed on the page
+3. Open `http://<your-ip>:5173` from another device
+4. Authenticate with the device code
 
 **Or scan the QR code** displayed on the Remote Access page.
 
@@ -105,10 +92,9 @@ Access from any device on your local network:
 
 Access from anywhere in the world with Cloudflare Tunnel:
 
-1. Install `cloudflared` (run `bun run setup` for guided installation)
-2. Go to **Settings** → **Remote Access** in the web UI
-3. Toggle on **"Public Access"**
-4. Share the generated `*.trycloudflare.com` URL
+1. Go to **Remote Access** in the desktop app
+2. Toggle on **"Public Access"**
+3. Share the generated `*.trycloudflare.com` URL
 
 **No port forwarding, no firewall changes, no VPN required.**
 
@@ -126,19 +112,75 @@ Access from anywhere in the world with Cloudflare Tunnel:
 
 ---
 
-## Use Cases
+## Device Management
 
-### Work from Anywhere
-Run OpenCode on your powerful desktop, control it from your laptop at a coffee shop.
+The desktop app includes a device management system:
 
-### Mobile Coding Assistant
-Get AI help on your phone while reviewing code on paper or whiteboard.
+- **View connected devices**: See all devices that have accessed your OpenCode instance
+- **Rename devices**: Give meaningful names to your devices
+- **Revoke access**: Remove devices you no longer want to have access
+- **Revoke all others**: Quickly revoke access from all devices except the current one
 
-### Pair Programming
-Share the public URL with a colleague for real-time collaboration.
+---
 
-### Home Server Setup
-Run on a home server, access from any device in your house.
+## Development
+
+### Commands
+
+```bash
+# Start in development mode (Electron + Vite HMR)
+bun run dev
+
+# Build for production
+bun run build
+
+# Package for distribution
+bun run dist:mac:arm64  # macOS Apple Silicon
+bun run dist:mac:x64    # macOS Intel
+bun run dist:win        # Windows
+
+# Update bundled binaries
+bun run update:opencode
+bun run update:cloudflared
+
+# Type checking
+bun run typecheck
+```
+
+### Project Structure
+
+```
+opencode-remote/
+├── electron/
+│   ├── main/              # Electron main process
+│   │   ├── services/      # OpenCode process, tunnel, device store
+│   │   └── ipc-handlers.ts
+│   └── preload/           # Preload scripts for IPC
+├── src/
+│   ├── pages/             # Page components (Chat, Settings, Devices)
+│   ├── components/        # UI components
+│   ├── lib/               # Core libraries (API client, auth, i18n)
+│   ├── stores/            # State management
+│   └── types/             # TypeScript definitions
+├── scripts/
+│   ├── update-opencode.ts # Download OpenCode binary
+│   └── update-cloudflared.ts
+├── electron.vite.config.ts
+└── electron-builder.yml
+```
+
+---
+
+## Tech Stack
+
+| Category | Technology |
+|----------|------------|
+| Framework | Electron + SolidJS |
+| Build Tool | electron-vite |
+| Styling | Tailwind CSS v4 |
+| Language | TypeScript |
+| Package Manager | Bun |
+| Tunnel | Cloudflare Tunnel |
 
 ---
 
@@ -148,100 +190,37 @@ OpenCode Remote uses multiple layers of security:
 
 | Layer | Protection |
 |-------|------------|
-| **Access Code** | Random 6-digit code required for each session |
-| **Token Auth** | JWT-like tokens stored in localStorage after login |
+| **Device Auth** | Each device must be authorized to access |
+| **Token Auth** | Secure tokens stored per-device |
 | **HTTPS** | Public tunnel automatically uses HTTPS via Cloudflare |
 | **Ephemeral URLs** | Public tunnel URLs change each time you start the tunnel |
 
 **Best Practices:**
-- Don't share your access code publicly
+- Revoke access from devices you no longer use
 - Disable public tunnel when not needed
 - Use for personal use only — not designed for multi-user scenarios
 
 ---
 
-## Development
-
-### Commands
-
-```bash
-# Start everything (OpenCode server + Web UI)
-bun run start
-
-# Development mode (Web UI only, requires manual OpenCode server)
-bun run dev
-
-# Install optional dependencies (cloudflared, etc.)
-bun run setup
-
-# Build for production
-bun run build
-
-# Type checking
-bunx tsc --noEmit
-```
-
-### Project Structure
-
-```
-opencode-remote/
-├── src/
-│   ├── pages/           # Page components (Chat, Login, Settings, RemoteAccess)
-│   ├── components/      # UI components
-│   ├── lib/             # Core libraries (API client, auth, i18n)
-│   ├── stores/          # State management
-│   └── types/           # TypeScript definitions
-├── scripts/
-│   ├── start.ts         # Startup script
-│   └── setup.ts         # Dependency setup
-└── vite.config.ts       # Vite config with auth middleware
-```
-
----
-
-## Tech Stack
-
-| Category | Technology |
-|----------|------------|
-| Framework | SolidJS |
-| Build Tool | Vite |
-| Styling | Tailwind CSS |
-| Language | TypeScript |
-| Package Manager | Bun |
-| Tunnel | Cloudflare Tunnel |
-
----
-
 ## Troubleshooting
 
-### OpenCode CLI not found
+### OpenCode binary not found
 
 ```bash
-# Run the setup script for guided installation
-bun run setup
-
-# Or install manually:
-# macOS/Linux
-curl -fsSL https://opencode.ai/install.sh | bash
-
-# Windows
-irm https://opencode.ai/install.ps1 | iex
-```
-
-### Port already in use
-
-```bash
-# Kill process on port 5174
-lsof -ti:5174 | xargs kill -9
-
-# Or change port in vite.config.ts
+# Download the latest OpenCode binary
+bun run update:opencode
 ```
 
 ### Public tunnel not working
 
-1. Ensure `cloudflared` is installed: `bun run setup`
-2. Check your internet connection
-3. Try restarting the tunnel from the Remote Access page
+```bash
+# Download cloudflared binary
+bun run update:cloudflared
+```
+
+### Build fails on Windows
+
+Ensure you have the required build tools installed for Electron.
 
 ---
 
@@ -278,6 +257,6 @@ Contributions are welcome! Please read our contributing guidelines before submit
 
 <div align="center">
 
-**Built with [OpenCode](https://opencode.ai) and [SolidJS](https://solidjs.com)**
+**Built with [OpenCode](https://opencode.ai), [Electron](https://electronjs.org) and [SolidJS](https://solidjs.com)**
 
 </div>
