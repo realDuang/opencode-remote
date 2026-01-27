@@ -15,9 +15,9 @@ export function useAuthGuard(pageName: string): void {
   onMount(async () => {
     const isValidToken = await Auth.checkDeviceToken();
     if (!isValidToken) {
-      logger.debug(`[${pageName}] Device token invalid, redirecting to login`);
+      logger.debug(`[${pageName}] Device token invalid, redirecting to entry`);
       Auth.clearAuth();
-      navigate("/login", { replace: true });
+      navigate("/", { replace: true });
     }
   });
 }

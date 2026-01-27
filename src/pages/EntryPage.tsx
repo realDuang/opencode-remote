@@ -89,11 +89,14 @@ export default function EntryPage() {
         const localIpResult = await systemAPI.getLocalIp();
         if (localIpResult) setLocalIp(localIpResult);
 
-        // For port, use the current window's port (Vite dev server port)
-        // This is the port that remote users should connect to
+        // For port, use the current window's port in dev mode
+        // In production (file:// protocol), use default port 5173
         const currentPort = window.location.port;
         if (currentPort) {
           setPort(parseInt(currentPort, 10));
+        } else {
+          // Production Electron: default to 5173
+          setPort(5173);
         }
       } else {
         // Browser: use HTTP API

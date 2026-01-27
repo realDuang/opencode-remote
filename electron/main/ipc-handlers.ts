@@ -34,7 +34,17 @@ export function registerIpcHandlers(): void {
   });
 
   ipcMain.handle("system:openExternal", async (_, url: string) => {
-    await shell.openExternal(url);
+    // Validate URL to prevent opening dangerous protocols
+    try {
+      const parsedUrl = new URL(url);
+      if (parsedUrl.protocol === "http:" || parsedUrl.protocol === "https:") {
+        await shell.openExternal(url);
+        return;
+      }
+      throw new Error("Unsupported URL protocol");
+    } catch {
+      throw new Error("Invalid URL");
+    }
   });
 
   ipcMain.handle("system:selectDirectory", async () => {
