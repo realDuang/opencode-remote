@@ -7,6 +7,8 @@
     "start": "bun scripts/start.ts",
     "setup": "bun scripts/setup.ts",
     "build": "vite build",
+    "build:official-app": "bun scripts/build-official-app.ts",
+    "update:official-app": "cd opencode && git pull && cd .. && bun run build:official-app",
     "preview": "vite preview"
   },
   "dependencies": {

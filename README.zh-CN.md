@@ -39,6 +39,8 @@
 | **默认安全** | 每次会话使用随机 6 位数访问码 |
 | **实时流式传输** | 通过 Server-Sent Events 实现消息实时推送 |
 | **完整功能** | 所有 OpenCode 功能都可通过 Web UI 无缝使用 |
+| **官方 OpenCode UI** | 访问完整功能的 OpenCode 网页应用 |
+| **跨设备同步** | 在多个设备间无缝继续你的工作 |
 
 ---
 
@@ -52,16 +54,21 @@
 ### 安装
 
 ```bash
-# 克隆仓库
-git clone https://github.com/realDuang/opencode-remote.git
+# 克隆仓库（包含子模块）
+git clone --recursive https://github.com/realDuang/opencode-remote.git
 cd opencode-remote
 
 # 安装依赖
 bun install
 
+# 构建官方 OpenCode 应用（仅首次需要）
+bun run build:official-app
+
 # 启动应用
 bun run start
 ```
+
+> **注意**：如果克隆时没有使用 `--recursive`，请运行 `git submodule update --init` 来初始化 OpenCode 子模块。
 
 ### 启动过程
 
@@ -86,6 +93,29 @@ Web UI: http://localhost:5174
 Use code: 847291
 ============================================================
 ```
+
+---
+
+## 两种 UI 选项
+
+OpenCode Remote 提供两种访问 OpenCode 的方式：
+
+### 1. 简洁聊天界面（默认）
+
+轻量级、移动端友好的聊天界面，优化了快速交互体验。登录后在根 URL 访问。
+
+### 2. 官方 OpenCode UI
+
+完整功能的 OpenCode 网页应用。点击聊天页面右上角的 **"官方 UI"** 按钮即可访问。
+
+| 特性 | 简洁聊天界面 | 官方 OpenCode UI |
+|------|-------------|-----------------|
+| 移动端优化 | ✅ | ⚠️ 桌面端优先 |
+| 完整功能 | 基础聊天 | ✅ 完整 |
+| 跨设备同步 | ✅ | ✅ |
+| 轻量级 | ✅ | 较重 |
+
+**跨设备同步**：你的会话状态（当前项目、布局偏好）会自动在所有设备间同步。
 
 ---
 
@@ -177,6 +207,12 @@ bun run setup
 # 生产构建
 bun run build
 
+# 构建/重新构建官方 OpenCode 应用
+bun run build:official-app
+
+# 更新 OpenCode 子模块并重新构建官方应用
+bun run update:official-app
+
 # 类型检查
 bunx tsc --noEmit
 ```
@@ -186,14 +222,16 @@ bunx tsc --noEmit
 ```
 opencode-remote/
 ├── src/
-│   ├── pages/           # 页面组件 (Chat, Login, Settings, RemoteAccess)
+│   ├── pages/           # 页面组件 (Chat, Login, Settings, RemoteAccess, OfficialApp)
 │   ├── components/      # UI 组件
-│   ├── lib/             # 核心库 (API 客户端, 认证, 国际化)
+│   ├── lib/             # 核心库 (API 客户端, 认证, 国际化, 存储同步)
 │   ├── stores/          # 状态管理
 │   └── types/           # TypeScript 类型定义
 ├── scripts/
 │   ├── start.ts         # 启动脚本
-│   └── setup.ts         # 依赖安装脚本
+│   ├── setup.ts         # 依赖安装脚本
+│   └── build-official-app.ts  # 官方应用构建脚本
+├── opencode/            # OpenCode 子模块（用于官方应用）
 └── vite.config.ts       # Vite 配置（含认证中间件）
 ```
 
@@ -242,6 +280,12 @@ lsof -ti:5174 | xargs kill -9
 1. 确保已安装 `cloudflared`：`bun run setup`
 2. 检查网络连接
 3. 尝试在远程访问页面重启隧道
+
+### 官方应用无法加载
+
+1. 确保子模块已初始化：`git submodule update --init`
+2. 构建官方应用：`bun run build:official-app`
+3. 如果构建失败，检查 `bun` 是否已安装并重试
 
 ---
 

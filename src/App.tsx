@@ -8,6 +8,7 @@ import EntryPage from "./pages/EntryPage";
 import Chat from "./pages/Chat";
 import Settings from "./pages/Settings";
 import Devices from "./pages/Devices";
+import OfficialApp from "./pages/OfficialApp";
 import { AccessRequestNotification } from "./components/AccessRequestNotification";
 
 function App() {
@@ -38,11 +39,15 @@ function App() {
                 setIsLocal(local);
                 if (!local) {
                   // Remote users: redirect to chat (deny access to config)
-                  logger.debug("[Remote Route] Remote user, redirecting to /chat");
+                  logger.debug(
+                    "[Remote Route] Remote user, redirecting to /chat",
+                  );
                   window.location.href = "/chat";
                 } else {
                   // Localhost users: redirect to / (EntryPage shows config)
-                  logger.debug("[Remote Route] Localhost user, redirecting to /");
+                  logger.debug(
+                    "[Remote Route] Localhost user, redirecting to /",
+                  );
                   window.location.href = "/";
                 }
               });
@@ -60,6 +65,7 @@ function App() {
         />
         <Route path="/settings" component={Settings} />
         <Route path="/devices" component={Devices} />
+        <Route path="/official" component={OfficialApp} />
         <Route
           path="/chat"
           component={() => {

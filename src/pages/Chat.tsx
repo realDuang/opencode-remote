@@ -11,10 +11,7 @@ import { useNavigate } from "@solidjs/router";
 import { client } from "../lib/opencode-client";
 import { logger } from "../lib/logger";
 import { sessionStore, setSessionStore } from "../stores/session";
-import {
-  messageStore,
-  setMessageStore,
-} from "../stores/message";
+import { messageStore, setMessageStore } from "../stores/message";
 import { MessageList } from "../components/MessageList";
 import { PromptInput } from "../components/PromptInput";
 import { SessionSidebar } from "../components/SessionSidebar";
@@ -50,7 +47,8 @@ function binarySearch<T>(
   return { found: false, index: left };
 }
 
-const DEFAULT_TITLE_PATTERN = /^(New session - |Child session - )\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
+const DEFAULT_TITLE_PATTERN =
+  /^(New session - |Child session - )\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
 
 function isDefaultTitle(title: string): boolean {
   return DEFAULT_TITLE_PATTERN.test(title);
@@ -74,7 +72,7 @@ export default function Chat() {
     providerID: string;
     modelID: string;
   } | null>(client.getDefaultModel());
-  
+
   // Agent mode state - default to "build" matching OpenCode's default
   const [currentAgent, setCurrentAgent] = createSignal<AgentMode>("build");
 
@@ -118,8 +116,8 @@ export default function Chat() {
         setIsSidebarOpen(false); // Reset sidebar state on desktop
       }
     };
-    window.addEventListener('resize', handleResize);
-    onCleanup(() => window.removeEventListener('resize', handleResize));
+    window.addEventListener("resize", handleResize);
+    onCleanup(() => window.removeEventListener("resize", handleResize));
   });
 
   // Load messages for specific session
@@ -142,16 +140,16 @@ export default function Chat() {
       messageInfos.push(msgInfo);
 
       // Store parts separately, sorted by id
-      const sortedParts = msgParts.slice().sort((a: any, b: any) =>
-        a.id.localeCompare(b.id)
-      );
+      const sortedParts = msgParts
+        .slice()
+        .sort((a: any, b: any) => a.id.localeCompare(b.id));
       setMessageStore("part", msgInfo.id, sortedParts);
     }
 
     // Store all messages, sorted by id
-    const sortedMessages = messageInfos.slice().sort((a, b) =>
-      a.id.localeCompare(b.id)
-    );
+    const sortedMessages = messageInfos
+      .slice()
+      .sort((a, b) => a.id.localeCompare(b.id));
     setMessageStore("message", sessionId, sortedMessages);
 
     setLoadingMessages(false);
@@ -160,40 +158,44 @@ export default function Chat() {
 
   const initializeSession = async () => {
     logger.debug("[Init] Starting session initialization");
-    
+
     const isValidToken = await Auth.checkDeviceToken();
     if (!isValidToken) {
-      logger.debug("[Init] Device token invalid or revoked, redirecting to login");
+      logger.debug(
+        "[Init] Device token invalid or revoked, redirecting to login",
+      );
       Auth.clearAuth();
       navigate("/login", { replace: true });
       return;
     }
-    
+
     setSessionStore({ loading: true });
 
     const projects = await client.listProjects();
     logger.debug("[Init] Loaded projects:", projects);
-    
+
     // Auto-hide global and invalid projects
     for (const p of projects) {
       if (!p.worktree || p.worktree === "/") {
         ProjectStore.hide(p.id);
       }
     }
-    
+
     const hiddenIds = ProjectStore.getHiddenIds();
     logger.debug("[Init] Hidden project IDs:", hiddenIds);
-    
+
     const validProjects = projects.filter((p) => {
       const isHidden = ProjectStore.isHidden(p.id);
-      logger.debug(`[Init] Project ${p.id} (${p.worktree}) isHidden: ${isHidden}`);
+      logger.debug(
+        `[Init] Project ${p.id} (${p.worktree}) isHidden: ${isHidden}`,
+      );
       return !isHidden;
     });
     const sessionPromises = validProjects.map((p) =>
       client.listSessionsForDirectory(p.worktree).catch((err) => {
         logger.error(`[Init] Failed to load sessions for ${p.worktree}:`, err);
         return [] as Session.Info[];
-      })
+      }),
     );
     const sessionArrays = await Promise.all(sessionPromises);
     const sessions = sessionArrays.flat();
@@ -210,8 +212,9 @@ export default function Chat() {
       summary: s.summary,
     }));
 
-    processedSessions.sort((a, b) => 
-      new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+    processedSessions.sort(
+      (a, b) =>
+        new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
     );
 
     let currentSession = processedSessions[0];
@@ -250,12 +253,12 @@ export default function Chat() {
   const handleSelectSession = async (sessionId: string) => {
     logger.debug("[SelectSession] Switching to session:", sessionId);
     setSessionStore("current", sessionId);
-    
-    const session = sessionStore.list.find(s => s.id === sessionId);
+
+    const session = sessionStore.list.find((s) => s.id === sessionId);
     if (session?.directory) {
       client.setDirectory(session.directory);
     }
-    
+
     if (isMobile()) {
       setIsSidebarOpen(false);
     }
@@ -270,8 +273,8 @@ export default function Chat() {
   // New session
   const handleNewSession = async (directory?: string) => {
     logger.debug("[NewSession] Creating new session in directory:", directory);
-    
-    const newSession = directory 
+
+    const newSession = directory
       ? await client.createSessionInDirectory(directory)
       : await client.createSession();
     logger.debug("[NewSession] Created:", newSession);
@@ -327,7 +330,7 @@ export default function Chat() {
     try {
       await client.updateSession(sessionId, { title: newTitle });
       setSessionStore("list", (list) =>
-        list.map((s) => (s.id === sessionId ? { ...s, title: newTitle } : s))
+        list.map((s) => (s.id === sessionId ? { ...s, title: newTitle } : s)),
       );
     } catch (error) {
       logger.error("[RenameSession] Failed:", error);
@@ -338,30 +341,40 @@ export default function Chat() {
     const info = deleteProjectInfo();
     if (!info) return;
 
-    logger.debug("[HideProject] Hiding project and deleting sessions:", info.projectID);
-    logger.debug("[HideProject] Hidden IDs before:", ProjectStore.getHiddenIds());
+    logger.debug(
+      "[HideProject] Hiding project and deleting sessions:",
+      info.projectID,
+    );
+    logger.debug(
+      "[HideProject] Hidden IDs before:",
+      ProjectStore.getHiddenIds(),
+    );
 
     const sessionsToDelete = sessionStore.list.filter(
-      (s) => s.projectID === info.projectID
+      (s) => s.projectID === info.projectID,
     );
-    
-    const currentSessionWillBeDeleted = sessionStore.current && 
-      sessionsToDelete.some(s => s.id === sessionStore.current);
-    
+
+    const currentSessionWillBeDeleted =
+      sessionStore.current &&
+      sessionsToDelete.some((s) => s.id === sessionStore.current);
+
     for (const session of sessionsToDelete) {
       await client.deleteSession(session.id);
     }
-    
+
     ProjectStore.hide(info.projectID);
-    logger.debug("[HideProject] Hidden IDs after:", ProjectStore.getHiddenIds());
-    
+    logger.debug(
+      "[HideProject] Hidden IDs after:",
+      ProjectStore.getHiddenIds(),
+    );
+
     setSessionStore("list", (list) =>
-      list.filter((s) => s.projectID !== info.projectID)
+      list.filter((s) => s.projectID !== info.projectID),
     );
     setSessionStore("projects", (projects) =>
-      projects.filter((p) => p.id !== info.projectID)
+      projects.filter((p) => p.id !== info.projectID),
     );
-    
+
     if (currentSessionWillBeDeleted) {
       const remainingSessions = sessionStore.list;
       if (remainingSessions.length > 0) {
@@ -370,23 +383,30 @@ export default function Chat() {
         await handleNewSession();
       }
     }
-    
+
     setDeleteProjectInfo(null);
   };
 
   const handleAddProject = async (directory: string) => {
     logger.debug("[AddProject] Initializing project for directory:", directory);
-    
+
     const { project, session } = await client.initializeProject(directory);
-    logger.debug("[AddProject] Project initialized:", project, "Session:", session);
-    
+    logger.debug(
+      "[AddProject] Project initialized:",
+      project,
+      "Session:",
+      session,
+    );
+
     ProjectStore.add(project.id, directory);
-    
-    const existingProject = sessionStore.projects.find(p => p.id === project.id);
+
+    const existingProject = sessionStore.projects.find(
+      (p) => p.id === project.id,
+    );
     if (!existingProject) {
       setSessionStore("projects", (projects) => [...projects, project]);
     }
-    
+
     if (session) {
       const processedSession = {
         id: session.id,
@@ -398,12 +418,14 @@ export default function Chat() {
         updatedAt: new Date(session.time.updated).toISOString(),
         summary: session.summary,
       };
-      
-      const existingSession = sessionStore.list.find(s => s.id === session.id);
+
+      const existingSession = sessionStore.list.find(
+        (s) => s.id === session.id,
+      );
       if (!existingSession) {
         setSessionStore("list", (list) => [processedSession, ...list]);
       }
-      
+
       await handleSelectSession(session.id);
     }
   };
@@ -413,14 +435,22 @@ export default function Chat() {
     permissionID: string,
     reply: Permission.Reply,
   ) => {
-    logger.debug("[Permission] Responding:", { sessionID, permissionID, reply });
-    
+    logger.debug("[Permission] Responding:", {
+      sessionID,
+      permissionID,
+      reply,
+    });
+
     try {
       await client.respondToPermission(permissionID, reply);
-      
+
       // Optimistically remove from queue (SSE will also send permission.replied)
       const existing = messageStore.permission[sessionID] || [];
-      setMessageStore("permission", sessionID, existing.filter(p => p.id !== permissionID));
+      setMessageStore(
+        "permission",
+        sessionID,
+        existing.filter((p) => p.id !== permissionID),
+      );
     } catch (error) {
       logger.error("[Permission] Failed to respond:", error);
     }
@@ -455,21 +485,23 @@ export default function Chat() {
       case "message.updated": {
         const msgInfo = event.data as MessageV2.Info;
         const targetSessionId = msgInfo.sessionID;
-        
+
         if (msgInfo.role === "user") {
           const currentMessages = messageStore.message[targetSessionId] || [];
-          const tempMessages = currentMessages.filter(m => m.id.startsWith("msg-temp-"));
-          
+          const tempMessages = currentMessages.filter((m) =>
+            m.id.startsWith("msg-temp-"),
+          );
+
           if (tempMessages.length > 0) {
             setMessageStore("message", targetSessionId, (draft) =>
-              draft.filter(m => !m.id.startsWith("msg-temp-"))
+              draft.filter((m) => !m.id.startsWith("msg-temp-")),
             );
-            tempMessages.forEach(tempMsg => {
+            tempMessages.forEach((tempMsg) => {
               setMessageStore("part", tempMsg.id, undefined as any);
             });
           }
         }
-        
+
         const messages = messageStore.message[targetSessionId] || [];
         const index = binarySearch(messages, msgInfo.id, (m) => m.id);
 
@@ -511,16 +543,26 @@ export default function Chat() {
         logger.debug("[SSE] Permission asked:", permission);
         const existing = messageStore.permission[permission.sessionID] || [];
         if (!existing.find((p) => p.id === permission.id)) {
-          setMessageStore("permission", permission.sessionID, [...existing, permission]);
+          setMessageStore("permission", permission.sessionID, [
+            ...existing,
+            permission,
+          ]);
         }
         break;
       }
 
       case "permission.replied": {
-        const { sessionID, requestID } = event.data as { sessionID: string; requestID: string };
+        const { sessionID, requestID } = event.data as {
+          sessionID: string;
+          requestID: string;
+        };
         logger.debug("[SSE] Permission replied:", requestID);
         const existing = messageStore.permission[sessionID] || [];
-        setMessageStore("permission", sessionID, existing.filter((p) => p.id !== requestID));
+        setMessageStore(
+          "permission",
+          sessionID,
+          existing.filter((p) => p.id !== requestID),
+        );
         break;
       }
     }
@@ -586,7 +628,6 @@ export default function Chat() {
 
   return (
     <div class="flex h-screen bg-gray-50/50 dark:bg-zinc-950 font-sans text-gray-900 dark:text-gray-100 overflow-hidden relative">
-
       {/* Mobile Sidebar Overlay */}
       <Show when={isMobile() && isSidebarOpen()}>
         <div
@@ -627,7 +668,21 @@ export default function Chat() {
               onClick={() => navigate("/")}
               class="w-full flex items-center gap-3 px-3 py-2 text-sm font-medium text-gray-600 dark:text-gray-400 hover:bg-white dark:hover:bg-zinc-800 hover:text-gray-900 dark:hover:text-white rounded-lg transition-all shadow-xs hover:shadow-sm"
             >
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="3" rx="2" /><line x1="8" x2="16" y1="21" y2="21" /><line x1="12" x2="12" y1="17" y2="21" /></svg>
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <rect width="20" height="14" x="2" y="3" rx="2" />
+                <line x1="8" x2="16" y1="21" y2="21" />
+                <line x1="12" x2="12" y1="17" y2="21" />
+              </svg>
               {t().chat.remoteAccess}
             </button>
           </Show>
@@ -635,14 +690,63 @@ export default function Chat() {
             onClick={() => navigate("/settings")}
             class="w-full flex items-center gap-3 px-3 py-2 text-sm font-medium text-gray-600 dark:text-gray-400 hover:bg-white dark:hover:bg-zinc-800 hover:text-gray-900 dark:hover:text-white rounded-lg transition-all shadow-xs hover:shadow-sm"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.09a2 2 0 0 1-1-1.74v-.51a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" /><circle cx="12" cy="12" r="3" /></svg>
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.09a2 2 0 0 1-1-1.74v-.51a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
+              <circle cx="12" cy="12" r="3" />
+            </svg>
             {t().chat.settings}
+          </button>
+          <button
+            onClick={() => navigate("/official")}
+            class="w-full flex items-center gap-3 px-3 py-2 text-sm font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <rect width="18" height="18" x="3" y="3" rx="2" />
+              <path d="M7 7h10" />
+              <path d="M7 12h10" />
+              <path d="M7 17h10" />
+            </svg>
+            Official UI
           </button>
           <button
             onClick={handleLogout}
             class="w-full flex items-center gap-3 px-3 py-2 text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><polyline points="16 17 21 12 16 7" /><line x1="21" x2="9" y1="12" y2="12" /></svg>
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+              <polyline points="16 17 21 12 16 7" />
+              <line x1="21" x2="9" y1="12" y2="12" />
+            </svg>
             {t().chat.logout}
           </button>
         </div>
@@ -650,7 +754,6 @@ export default function Chat() {
 
       {/* Main Chat Area */}
       <div class="flex-1 flex flex-col overflow-hidden min-w-0 bg-white dark:bg-zinc-900">
-
         {/* Header */}
         <header class="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-zinc-800/50 bg-white/80 dark:bg-zinc-900/80 backdrop-blur-xs sticky top-0 z-10">
           <div class="flex items-center gap-3">
@@ -658,17 +761,36 @@ export default function Chat() {
               onClick={toggleSidebar}
               class="md:hidden p-2 -ml-2 text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-zinc-800 rounded-lg transition-colors"
             >
-              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" x2="20" y1="12" y2="12" /><line x1="4" x2="20" y1="6" y2="6" /><line x1="4" x2="20" y1="18" y2="18" /></svg>
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <line x1="4" x2="20" y1="12" y2="12" />
+                <line x1="4" x2="20" y1="6" y2="6" />
+                <line x1="4" x2="20" y1="18" y2="18" />
+              </svg>
             </button>
             <h1 class="text-base font-semibold text-gray-900 dark:text-white truncate">
-              {getDisplayTitle(sessionStore.list.find(s => s.id === sessionStore.current)?.title || "")}
+              {getDisplayTitle(
+                sessionStore.list.find((s) => s.id === sessionStore.current)
+                  ?.title || "",
+              )}
             </h1>
             {/* Agent Mode Indicator */}
-            <span class={`px-2 py-0.5 text-[10px] font-medium rounded-full ${
-              currentAgent() === "plan"
-                ? "bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400"
-                : "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
-            }`}>
+            <span
+              class={`px-2 py-0.5 text-[10px] font-medium rounded-full ${
+                currentAgent() === "plan"
+                  ? "bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400"
+                  : "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
+              }`}
+            >
               {currentAgent() === "plan" ? t().prompt.plan : t().prompt.build}
             </span>
           </div>
@@ -696,14 +818,33 @@ export default function Chat() {
                 </div>
               }
             >
-              <div ref={setMessagesRef} class="flex-1 overflow-y-auto px-4 md:px-6 scroll-smooth">
+              <div
+                ref={setMessagesRef}
+                class="flex-1 overflow-y-auto px-4 md:px-6 scroll-smooth"
+              >
                 <div class="max-w-3xl mx-auto w-full py-6">
                   <Show
-                    when={sessionStore.current && messageStore.message[sessionStore.current]?.length > 0}
+                    when={
+                      sessionStore.current &&
+                      messageStore.message[sessionStore.current]?.length > 0
+                    }
                     fallback={
                       <div class="flex flex-col items-center justify-center h-[50vh] text-center px-4">
                         <div class="w-16 h-16 bg-gray-100 dark:bg-zinc-800 rounded-2xl flex items-center justify-center mb-6 text-gray-400 dark:text-gray-500">
-                          <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 9a2 2 0 0 1-2 2H6l-4 4V4c0-1.1.9-2 2-2h8a2 2 0 0 1 2 2v5Z" /><path d="M18 9h2a2 2 0 0 1 2 2v11l-4-4h-6a2 2 0 0 1-2-2v-1" /></svg>
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            width="32"
+                            height="32"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="1.5"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                          >
+                            <path d="M14 9a2 2 0 0 1-2 2H6l-4 4V4c0-1.1.9-2 2-2h8a2 2 0 0 1 2 2v5Z" />
+                            <path d="M18 9h2a2 2 0 0 1 2 2v11l-4-4h-6a2 2 0 0 1-2-2v-1" />
+                          </svg>
                         </div>
                         <h2 class="text-xl font-semibold text-gray-900 dark:text-white mb-2">
                           {t().chat.startConversation}
@@ -714,7 +855,11 @@ export default function Chat() {
                       </div>
                     }
                   >
-                    <MessageList sessionID={sessionStore.current!} isWorking={sending()} onPermissionRespond={handlePermissionRespond} />
+                    <MessageList
+                      sessionID={sessionStore.current!}
+                      isWorking={sending()}
+                      onPermissionRespond={handlePermissionRespond}
+                    />
                   </Show>
                 </div>
               </div>
@@ -722,9 +867,9 @@ export default function Chat() {
               {/* Input Area */}
               <div class="p-4 bg-white/90 dark:bg-zinc-900/90 backdrop-blur-xs border-t border-gray-100 dark:border-zinc-800 relative z-20">
                 <div class="max-w-3xl mx-auto w-full">
-                  <PromptInput 
-                    onSend={handleSendMessage} 
-                    disabled={sending()} 
+                  <PromptInput
+                    onSend={handleSendMessage}
+                    disabled={sending()}
                     currentAgent={currentAgent()}
                     onAgentChange={setCurrentAgent}
                     onModelChange={handleModelChange}
@@ -757,4 +902,3 @@ export default function Chat() {
     </div>
   );
 }
-

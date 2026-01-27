@@ -7,6 +7,8 @@ import os from "os";
 import type { IncomingMessage, ServerResponse } from "http";
 import { tunnelManager } from "./scripts/tunnel-manager";
 import { deviceStore, type DeviceInfo } from "./scripts/device-store";
+import { syncStateStore } from "./scripts/sync-state-store";
+import { storageSyncStore } from "./scripts/storage-sync-store";
 
 // ============================================================================
 // Helper Functions
@@ -77,6 +79,18 @@ function isLocalhost(ip: string): boolean {
 }
 
 // ============================================================================
+// OpenCode Server Auth
+// ============================================================================
+
+function getOpenCodeAuthHeader(): Record<string, string> {
+  const password = process.env.OPENCODE_SERVER_PASSWORD;
+  if (!password) return {};
+  const username = process.env.OPENCODE_SERVER_USERNAME ?? "opencode";
+  const credentials = Buffer.from(`${username}:${password}`).toString("base64");
+  return { Authorization: `Basic ${credentials}` };
+}
+
+// ============================================================================
 // Vite Config
 // ============================================================================
 
@@ -87,6 +101,85 @@ export default defineConfig({
     {
       name: "custom-api-middleware",
       configureServer(server) {
+        // ====================================================================
+        // Static file serving for official OpenCode app
+        // Serves files from public/opencode-app/ directory
+        // ====================================================================
+        server.middlewares.use((req, res, next) => {
+          if (!req.url?.startsWith("/opencode-app/")) {
+            next();
+            return;
+          }
+
+          const urlPath = req.url.replace(/\?.*$/, ""); // Remove query string
+          const filePath = path.join(process.cwd(), "public", urlPath);
+
+          // Check if file exists
+          if (fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
+            const ext = path.extname(filePath).toLowerCase();
+            const mimeTypes: Record<string, string> = {
+              ".html": "text/html",
+              ".css": "text/css",
+              ".js": "application/javascript",
+              ".json": "application/json",
+              ".png": "image/png",
+              ".jpg": "image/jpeg",
+              ".jpeg": "image/jpeg",
+              ".gif": "image/gif",
+              ".svg": "image/svg+xml",
+              ".ico": "image/x-icon",
+              ".woff": "font/woff",
+              ".woff2": "font/woff2",
+              ".ttf": "font/ttf",
+              ".eot": "application/vnd.ms-fontobject",
+            };
+
+            res.setHeader(
+              "Content-Type",
+              mimeTypes[ext] || "application/octet-stream",
+            );
+            const stream = fs.createReadStream(filePath);
+            stream.on("error", (err) => {
+              console.error("[Static] Error reading file:", err);
+              res.statusCode = 500;
+              res.end("Internal Server Error");
+            });
+            stream.pipe(res);
+            return;
+          }
+
+          // For directory requests (like /opencode-app/), serve index.html
+          if (urlPath.endsWith("/")) {
+            const indexPath = path.join(
+              process.cwd(),
+              "public",
+              urlPath,
+              "index.html",
+            );
+            if (fs.existsSync(indexPath)) {
+              res.setHeader("Content-Type", "text/html");
+              fs.createReadStream(indexPath).pipe(res);
+              return;
+            }
+          }
+
+          // SPA fallback: For any /opencode-app/* route that isn't a static file,
+          // serve the index.html to let the frontend router handle it
+          const indexPath = path.join(
+            process.cwd(),
+            "public",
+            "opencode-app",
+            "index.html",
+          );
+          if (fs.existsSync(indexPath)) {
+            res.setHeader("Content-Type", "text/html");
+            fs.createReadStream(indexPath).pipe(res);
+            return;
+          }
+
+          next();
+        });
+
         // ====================================================================
         // Auth: Verify code and issue device token (LOCALHOST ONLY)
         // POST /api/auth/verify
@@ -100,7 +193,11 @@ export default defineConfig({
 
           const clientIp = getClientIp(req);
           if (!isLocalhost(clientIp)) {
-            sendJson(res, { error: "Use request-access endpoint for remote devices" }, 403);
+            sendJson(
+              res,
+              { error: "Use request-access endpoint for remote devices" },
+              403,
+            );
             return;
           }
 
@@ -301,7 +398,11 @@ export default defineConfig({
             const authCodePath = path.join(process.cwd(), ".auth-code");
 
             if (!fs.existsSync(authCodePath)) {
-              sendJson(res, { success: false, error: "Auth code not found" }, 500);
+              sendJson(
+                res,
+                { success: false, error: "Auth code not found" },
+                500,
+              );
               return;
             }
 
@@ -319,7 +420,7 @@ export default defineConfig({
                 platform: device?.platform || "Unknown",
                 browser: device?.browser || "Unknown",
               },
-              clientIp
+              clientIp,
             );
 
             sendJson(res, {
@@ -337,7 +438,10 @@ export default defineConfig({
         // ====================================================================
         server.middlewares.use((req, res, next) => {
           const url = new URL(req.url || "", `http://${req.headers.host}`);
-          if (url.pathname !== "/api/auth/check-status" || req.method !== "GET") {
+          if (
+            url.pathname !== "/api/auth/check-status" ||
+            req.method !== "GET"
+          ) {
             next();
             return;
           }
@@ -370,7 +474,10 @@ export default defineConfig({
         // GET /api/admin/pending-requests
         // ====================================================================
         server.middlewares.use((req, res, next) => {
-          if (req.url !== "/api/admin/pending-requests" || req.method !== "GET") {
+          if (
+            req.url !== "/api/admin/pending-requests" ||
+            req.method !== "GET"
+          ) {
             next();
             return;
           }
@@ -434,9 +541,16 @@ export default defineConfig({
 
             const approved = deviceStore.approveRequest(requestId);
             if (approved) {
-              sendJson(res, { success: true, device: deviceStore.getDevice(approved.deviceId!) });
+              sendJson(res, {
+                success: true,
+                device: deviceStore.getDevice(approved.deviceId!),
+              });
             } else {
-              sendJson(res, { error: "Request not found or already processed" }, 404);
+              sendJson(
+                res,
+                { error: "Request not found or already processed" },
+                404,
+              );
             }
           } catch (err) {
             sendJson(res, { error: "Bad request" }, 400);
@@ -482,7 +596,11 @@ export default defineConfig({
             if (denied) {
               sendJson(res, { success: true });
             } else {
-              sendJson(res, { error: "Request not found or already processed" }, 404);
+              sendJson(
+                res,
+                { error: "Request not found or already processed" },
+                404,
+              );
             }
           } catch (err) {
             sendJson(res, { error: "Bad request" }, 400);
@@ -541,7 +659,11 @@ export default defineConfig({
 
           // Prevent revoking current device from this endpoint
           if (targetDeviceId === result.deviceId) {
-            sendJson(res, { error: "Cannot revoke current device. Use logout instead." }, 400);
+            sendJson(
+              res,
+              { error: "Cannot revoke current device. Use logout instead." },
+              400,
+            );
             return;
           }
 
@@ -591,7 +713,10 @@ export default defineConfig({
             }
 
             deviceStore.updateDevice(targetDeviceId, { name: name.trim() });
-            sendJson(res, { success: true, device: deviceStore.getDevice(targetDeviceId) });
+            sendJson(res, {
+              success: true,
+              device: deviceStore.getDevice(targetDeviceId),
+            });
           } catch {
             sendJson(res, { error: "Bad request" }, 400);
           }
@@ -602,7 +727,10 @@ export default defineConfig({
         // POST /api/devices/revoke-others
         // ====================================================================
         server.middlewares.use((req, res, next) => {
-          if (req.url !== "/api/devices/revoke-others" || req.method !== "POST") {
+          if (
+            req.url !== "/api/devices/revoke-others" ||
+            req.method !== "POST"
+          ) {
             next();
             return;
           }
@@ -688,28 +816,164 @@ export default defineConfig({
             sendJson(res, { error: error.message }, 500);
           }
         });
+
+        // ====================================================================
+        // Sync State: Cross-device URL sync for Official App
+        // GET /api/sync-state - Get current sync state
+        // POST /api/sync-state - Update sync state with current URL
+        // ====================================================================
+        server.middlewares.use(async (req, res, next) => {
+          if (!req.url?.startsWith("/api/sync-state")) {
+            next();
+            return;
+          }
+
+          const token = extractBearerToken(req);
+          if (!token) {
+            sendJson(res, { error: "Unauthorized" }, 401);
+            return;
+          }
+
+          // Use verifyTokenLoose to allow tokens from removed devices to sync state
+          const result = deviceStore.verifyTokenLoose(token);
+          if (!result.valid || !result.deviceId) {
+            sendJson(res, { error: "Invalid token" }, 401);
+            return;
+          }
+
+          try {
+            if (req.url === "/api/sync-state" && req.method === "GET") {
+              sendJson(res, syncStateStore.getState());
+              return;
+            }
+
+            if (req.url === "/api/sync-state" && req.method === "POST") {
+              const { url, timestamp } = await parseBody(req);
+              if (typeof url !== "string") {
+                sendJson(res, { error: "url is required" }, 400);
+                return;
+              }
+              const state = syncStateStore.setState(url, result.deviceId);
+              sendJson(res, state);
+              return;
+            }
+
+            sendJson(res, { error: "Not found" }, 404);
+          } catch (error: any) {
+            console.error("[Sync State API Error]", error);
+            sendJson(res, { error: error.message }, 500);
+          }
+        });
+
+        // ====================================================================
+        // Storage Sync: Cross-device localStorage sync for Official App
+        // GET /api/storage-sync - Get synced localStorage data
+        // POST /api/storage-sync - Update localStorage data
+        // ====================================================================
+        server.middlewares.use(async (req, res, next) => {
+          if (!req.url?.startsWith("/api/storage-sync")) {
+            next();
+            return;
+          }
+
+          const token = extractBearerToken(req);
+          if (!token) {
+            sendJson(res, { error: "Unauthorized" }, 401);
+            return;
+          }
+
+          const result = deviceStore.verifyTokenLoose(token);
+          if (!result.valid || !result.deviceId) {
+            sendJson(res, { error: "Invalid token" }, 401);
+            return;
+          }
+
+          try {
+            if (req.url === "/api/storage-sync" && req.method === "GET") {
+              const state = storageSyncStore.getState();
+              sendJson(res, {
+                ...state,
+                syncedKeys: storageSyncStore.getSyncedKeys(),
+              });
+              return;
+            }
+
+            if (req.url === "/api/storage-sync" && req.method === "POST") {
+              const { data } = await parseBody(req);
+              if (!data || typeof data !== "object") {
+                sendJson(res, { error: "data object is required" }, 400);
+                return;
+              }
+              const state = storageSyncStore.updateData(data, result.deviceId);
+              sendJson(res, state);
+              return;
+            }
+
+            sendJson(res, { error: "Not found" }, 404);
+          } catch (error: any) {
+            console.error("[Storage Sync API Error]", error);
+            sendJson(res, { error: error.message }, 500);
+          }
+        });
       },
     },
+
   ],
   server: {
     port: 5174,
     host: true,
-    allowedHosts: [
-      "localhost",
-      ".trycloudflare.com",
-    ],
-    proxy: {
-      "/opencode-api": {
-        target: "http://localhost:4096",
-        changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/opencode-api/, ""),
-      },
-      "/opencode-api/global/event": {
-        target: "http://localhost:4096",
-        changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/opencode-api/, ""),
-        timeout: 0,
-      },
+    allowedHosts: true, // Allow all hosts (localhost, LAN IPs, tunnels)
+    watch: {
+      ignored: [".sync-state.json", ".auth-code", ".devices.json", ".storage-sync.json"],
     },
+    proxy: (() => {
+      const authHeaders = getOpenCodeAuthHeader();
+      const baseConfig = {
+        target: "http://localhost:4096",
+        changeOrigin: true,
+        headers: authHeaders,
+      };
+      return {
+        // Proxy for our custom API client (used by simple UI)
+        "/opencode-api": {
+          ...baseConfig,
+          rewrite: (path: string) => path.replace(/^\/opencode-api/, ""),
+        },
+        "/opencode-api/global/event": {
+          ...baseConfig,
+          rewrite: (path: string) => path.replace(/^\/opencode-api/, ""),
+          timeout: 0,
+        },
+        // Proxy for Official OpenCode App (uses direct API paths)
+        // SSE endpoints need special timeout handling
+        "/global/event": { ...baseConfig, timeout: 0 },
+        "/event": { ...baseConfig, timeout: 0 },
+        // All OpenCode API paths used by Official App
+        "/global": baseConfig,
+        "/session": baseConfig,
+        "/project": baseConfig,
+        "/config": baseConfig,
+        "/pty": baseConfig,
+        "/experimental": baseConfig,
+        "/provider": baseConfig,
+        "/permission": baseConfig,
+        "/question": baseConfig,
+        "/mcp": baseConfig,
+        "/tui": baseConfig,
+        "/path": baseConfig,
+        "/vcs": baseConfig,
+        "/command": baseConfig,
+        "/agent": baseConfig,
+        "/skill": baseConfig,
+        "/lsp": baseConfig,
+        "/formatter": baseConfig,
+        "/auth": baseConfig,
+        "/instance": baseConfig,
+        "/doc": baseConfig,
+        "/log": baseConfig,
+        "/file": baseConfig,
+        "/find": baseConfig,
+      };
+    })(),
   },
 });
