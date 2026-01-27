@@ -178,11 +178,22 @@ async function main() {
     if (isWindows) {
       // On Windows, use taskkill to terminate process trees
       const { exec } = await import("child_process");
-      if (opencodeProcess.pid) {
-        exec(`taskkill /pid ${opencodeProcess.pid} /T /F`, () => {});
+      const opencodePid = opencodeProcess.pid;
+      const vitePid = viteProcess.pid;
+      
+      if (typeof opencodePid === "number" && Number.isInteger(opencodePid) && opencodePid > 0) {
+        exec(`taskkill /pid ${opencodePid} /T /F`, (err) => {
+          if (err) {
+            console.error("[Cleanup] Failed to kill OpenCode process:", err);
+          }
+        });
       }
-      if (viteProcess.pid) {
-        exec(`taskkill /pid ${viteProcess.pid} /T /F`, () => {});
+      if (typeof vitePid === "number" && Number.isInteger(vitePid) && vitePid > 0) {
+        exec(`taskkill /pid ${vitePid} /T /F`, (err) => {
+          if (err) {
+            console.error("[Cleanup] Failed to kill Vite process:", err);
+          }
+        });
       }
     } else {
       opencodeProcess.kill();

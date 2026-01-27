@@ -110,9 +110,10 @@ class OpenCodeProcess extends EventEmitter {
       // On Unix, SIGTERM works normally
       if (process.platform === "win32") {
         // Use taskkill to forcefully terminate the process tree on Windows
-        if (this.process.pid) {
+        const pid = this.process.pid;
+        if (typeof pid === "number" && Number.isInteger(pid) && pid > 0) {
           const { exec } = await import("child_process");
-          exec(`taskkill /pid ${this.process.pid} /T /F`, (err) => {
+          exec(`taskkill /pid ${pid} /T /F`, (err) => {
             if (err) {
               console.error("[OpenCode] Failed to kill process:", err);
             }

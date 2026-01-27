@@ -85,9 +85,10 @@ class TunnelManager {
     if (this.process) {
       // On Windows, we need to kill the process tree since we spawn with shell: true
       if (process.platform === "win32") {
-        if (this.process.pid) {
+        const pid = this.process.pid;
+        if (typeof pid === "number" && Number.isInteger(pid) && pid > 0) {
           const { exec } = await import("child_process");
-          exec(`taskkill /pid ${this.process.pid} /T /F`, (err) => {
+          exec(`taskkill /pid ${pid} /T /F`, (err) => {
             if (err) {
               console.error("[Tunnel] Failed to kill process:", err);
             }
