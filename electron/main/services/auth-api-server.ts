@@ -9,6 +9,7 @@ import { deviceStore } from "./device-store";
 // ============================================================================
 
 const AUTH_API_PORT = 4097; // Internal port, not exposed externally
+const MAX_BODY_SIZE = 1024 * 1024; // 1MB limit to prevent memory exhaustion
 
 interface RequestBody {
   [key: string]: any;
@@ -17,7 +18,16 @@ interface RequestBody {
 function parseBody(req: http.IncomingMessage): Promise<RequestBody> {
   return new Promise((resolve, reject) => {
     let body = "";
-    req.on("data", (chunk) => (body += chunk));
+    let size = 0;
+    req.on("data", (chunk) => {
+      size += chunk.length;
+      if (size > MAX_BODY_SIZE) {
+        req.destroy();
+        reject(new Error("Request body too large"));
+        return;
+      }
+      body += chunk;
+    });
     req.on("end", () => {
       try {
         resolve(body ? JSON.parse(body) : {});

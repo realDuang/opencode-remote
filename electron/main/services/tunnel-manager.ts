@@ -1,6 +1,7 @@
 import { spawn, ChildProcess } from "child_process";
 import { app } from "electron";
 import path from "path";
+import fs from "fs";
 
 interface TunnelInfo {
   url: string;
@@ -41,6 +42,12 @@ class TunnelManager {
 
     try {
       const cloudflaredPath = this.getCloudflaredPath();
+
+      // Check if binary exists before spawning
+      if (app.isPackaged && !fs.existsSync(cloudflaredPath)) {
+        throw new Error(`Cloudflared binary not found at ${cloudflaredPath}`);
+      }
+
       this.process = spawn(cloudflaredPath, ["tunnel", "--url", `http://localhost:${port}`]);
 
       const handleOutput = (data: Buffer) => {
@@ -80,11 +87,31 @@ class TunnelManager {
   }
 
   async stop(): Promise<void> {
-    if (this.process) {
-      this.process.kill();
-      this.process = null;
-    }
+    const proc = this.process;
     this.info = { url: "", status: "stopped" };
+
+    if (!proc) {
+      return;
+    }
+
+    this.process = null;
+
+    // Send SIGTERM for graceful shutdown
+    try {
+      proc.kill("SIGTERM");
+    } catch {
+      // Process may already be dead
+      return;
+    }
+
+    // Wait for process to exit with timeout
+    await Promise.race([
+      new Promise<void>((resolve) => {
+        proc.once("close", resolve);
+        proc.once("error", resolve);
+      }),
+      new Promise<void>((resolve) => setTimeout(resolve, 5000)),
+    ]);
   }
 
   getInfo(): TunnelInfo {

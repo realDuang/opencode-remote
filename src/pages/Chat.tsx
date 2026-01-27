@@ -98,7 +98,7 @@ export default function Chat() {
 
   const handleLogout = () => {
     Auth.logout();
-    navigate("/login", { replace: true });
+    navigate("/", { replace: true });
   };
 
   const scrollToBottom = () => {
@@ -167,9 +167,9 @@ export default function Chat() {
 
       const isValidToken = await Auth.checkDeviceToken();
       if (!isValidToken) {
-        logger.debug("[Init] Device token invalid or revoked, redirecting to login");
+        logger.debug("[Init] Device token invalid or revoked, redirecting to entry");
         Auth.clearAuth();
-        navigate("/login", { replace: true });
+        navigate("/", { replace: true });
         return;
       }
 

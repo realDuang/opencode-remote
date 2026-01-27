@@ -1,6 +1,7 @@
 import { spawn, ChildProcess } from "child_process";
 import { app } from "electron";
 import path from "path";
+import fs from "fs";
 import { EventEmitter } from "events";
 
 interface OpenCodeStatus {
@@ -35,6 +36,13 @@ class OpenCodeProcess extends EventEmitter {
     }
 
     const opencodePath = this.getOpencodePath();
+
+    // Check if binary exists before spawning
+    if (app.isPackaged && !fs.existsSync(opencodePath)) {
+      const error = new Error(`OpenCode binary not found at ${opencodePath}`);
+      this.status = { running: false, port: this.port, error: error.message };
+      throw error;
+    }
 
     try {
       this.process = spawn(
