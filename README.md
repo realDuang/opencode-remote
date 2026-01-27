@@ -39,6 +39,8 @@ But what if you want to **use your phone on the couch**, **pair program from an 
 | **Secure by Default** | Random 6-digit access codes for each session |
 | **Real-time Streaming** | Live message streaming via Server-Sent Events |
 | **Full Feature Parity** | All OpenCode features work seamlessly through the web UI |
+| **Official OpenCode UI** | Access the complete OpenCode web app with full functionality |
+| **Cross-Device Sync** | Seamlessly continue your work across multiple devices |
 
 ---
 
@@ -52,16 +54,21 @@ But what if you want to **use your phone on the couch**, **pair program from an 
 ### Installation
 
 ```bash
-# Clone the repository
-git clone https://github.com/realDuang/opencode-remote.git
+# Clone the repository (with submodules)
+git clone --recursive https://github.com/realDuang/opencode-remote.git
 cd opencode-remote
 
 # Install dependencies
 bun install
 
+# Build the Official OpenCode App (first time only)
+bun run build:official-app
+
 # Start the application
 bun run start
 ```
+
+> **Note**: If you cloned without `--recursive`, run `git submodule update --init` to initialize the OpenCode submodule.
 
 ### What Happens
 
@@ -86,6 +93,29 @@ Web UI: http://localhost:5174
 Use code: 847291
 ============================================================
 ```
+
+---
+
+## Two UI Options
+
+OpenCode Remote provides two ways to access OpenCode:
+
+### 1. Simple Chat UI (Default)
+
+A lightweight, mobile-friendly chat interface optimized for quick interactions. Access it at the root URL after login.
+
+### 2. Official OpenCode UI
+
+The complete OpenCode web application with all features. Click the **"Official UI"** button in the top-right corner of the Chat page to access it.
+
+| Feature | Simple Chat UI | Official OpenCode UI |
+|---------|----------------|---------------------|
+| Mobile-optimized | ✅ | ⚠️ Desktop-focused |
+| Full feature set | Basic chat | ✅ Complete |
+| Cross-device sync | ✅ | ✅ |
+| Lightweight | ✅ | Heavier |
+
+**Cross-Device Sync**: Your session state (current project, layout preferences) automatically syncs across all your devices.
 
 ---
 
@@ -177,6 +207,12 @@ bun run setup
 # Build for production
 bun run build
 
+# Build/rebuild the Official OpenCode App
+bun run build:official-app
+
+# Update OpenCode submodule and rebuild Official App
+bun run update:official-app
+
 # Type checking
 bunx tsc --noEmit
 ```
@@ -186,14 +222,16 @@ bunx tsc --noEmit
 ```
 opencode-remote/
 ├── src/
-│   ├── pages/           # Page components (Chat, Login, Settings, RemoteAccess)
+│   ├── pages/           # Page components (Chat, Login, Settings, RemoteAccess, OfficialApp)
 │   ├── components/      # UI components
-│   ├── lib/             # Core libraries (API client, auth, i18n)
+│   ├── lib/             # Core libraries (API client, auth, i18n, storage-sync)
 │   ├── stores/          # State management
 │   └── types/           # TypeScript definitions
 ├── scripts/
 │   ├── start.ts         # Startup script
-│   └── setup.ts         # Dependency setup
+│   ├── setup.ts         # Dependency setup
+│   └── build-official-app.ts  # Official App build script
+├── opencode/            # OpenCode submodule (for Official App)
 └── vite.config.ts       # Vite config with auth middleware
 ```
 
@@ -242,6 +280,12 @@ lsof -ti:5174 | xargs kill -9
 1. Ensure `cloudflared` is installed: `bun run setup`
 2. Check your internet connection
 3. Try restarting the tunnel from the Remote Access page
+
+### Official App not loading
+
+1. Ensure the submodule is initialized: `git submodule update --init`
+2. Build the Official App: `bun run build:official-app`
+3. If the build fails, check that `bun` is installed and try again
 
 ---
 

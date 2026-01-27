@@ -39,6 +39,8 @@ OpenCode와 같은 AI 코딩 에이전트는 다음 조건을 갖춘 머신에�
 | **기본적으로 안전** | 세션마다 랜덤 6자리 접속 코드 사용 |
 | **실시간 스트리밍** | Server-Sent Events를 통한 실시간 메시지 스트리밍 |
 | **전체 기능 지원** | 모든 OpenCode 기능이 웹 UI에서 원활하게 작동 |
+| **공식 OpenCode UI** | 전체 기능을 갖춘 OpenCode 웹 앱에 접속 |
+| **크로스 디바이스 동기화** | 여러 기기에서 끊김 없이 작업 이어가기 |
 
 ---
 
@@ -52,16 +54,21 @@ OpenCode와 같은 AI 코딩 에이전트는 다음 조건을 갖춘 머신에�
 ### 설치
 
 ```bash
-# 저장소 클론
-git clone https://github.com/realDuang/opencode-remote.git
+# 저장소 클론 (서브모듈 포함)
+git clone --recursive https://github.com/realDuang/opencode-remote.git
 cd opencode-remote
 
 # 의존성 설치
 bun install
 
+# 공식 OpenCode 앱 빌드 (처음 한 번만)
+bun run build:official-app
+
 # 애플리케이션 시작
 bun run start
 ```
+
+> **참고**: `--recursive` 없이 클론한 경우, `git submodule update --init`을 실행하여 OpenCode 서브모듈을 초기화하세요.
 
 ### 실행 과정
 
@@ -86,6 +93,29 @@ Web UI: http://localhost:5174
 Use code: 847291
 ============================================================
 ```
+
+---
+
+## 두 가지 UI 옵션
+
+OpenCode Remote는 OpenCode에 접속하는 두 가지 방법을 제공합니다:
+
+### 1. 심플 채팅 UI (기본)
+
+빠른 상호작용을 위해 최적화된 가볍고 모바일 친화적인 채팅 인터페이스. 로그인 후 루트 URL에서 접속합니다.
+
+### 2. 공식 OpenCode UI
+
+모든 기능을 갖춘 완전한 OpenCode 웹 애플리케이션. 채팅 페이지 오른쪽 상단의 **"공식 UI"** 버튼을 클릭하여 접속합니다.
+
+| 기능 | 심플 채팅 UI | 공식 OpenCode UI |
+|------|------------|-----------------|
+| 모바일 최적화 | ✅ | ⚠️ 데스크톱 중심 |
+| 전체 기능 | 기본 채팅 | ✅ 완전 |
+| 크로스 디바이스 동기화 | ✅ | ✅ |
+| 경량 | ✅ | 무거움 |
+
+**크로스 디바이스 동기화**: 세션 상태(현재 프로젝트, 레이아웃 설정)가 모든 기기에서 자동으로 동기화됩니다.
 
 ---
 
@@ -177,6 +207,12 @@ bun run setup
 # 프로덕션 빌드
 bun run build
 
+# 공식 OpenCode 앱 빌드/재빌드
+bun run build:official-app
+
+# OpenCode 서브모듈 업데이트 및 공식 앱 재빌드
+bun run update:official-app
+
 # 타입 체크
 bunx tsc --noEmit
 ```
@@ -186,14 +222,16 @@ bunx tsc --noEmit
 ```
 opencode-remote/
 ├── src/
-│   ├── pages/           # 페이지 컴포넌트 (Chat, Login, Settings, RemoteAccess)
+│   ├── pages/           # 페이지 컴포넌트 (Chat, Login, Settings, RemoteAccess, OfficialApp)
 │   ├── components/      # UI 컴포넌트
-│   ├── lib/             # 코어 라이브러리 (API 클라이언트, 인증, i18n)
+│   ├── lib/             # 코어 라이브러리 (API 클라이언트, 인증, i18n, 스토리지 동기화)
 │   ├── stores/          # 상태 관리
 │   └── types/           # TypeScript 타입 정의
 ├── scripts/
 │   ├── start.ts         # 시작 스크립트
-│   └── setup.ts         # 의존성 설정
+│   ├── setup.ts         # 의존성 설정
+│   └── build-official-app.ts  # 공식 앱 빌드 스크립트
+├── opencode/            # OpenCode 서브모듈 (공식 앱용)
 └── vite.config.ts       # Vite 설정 (인증 미들웨어 포함)
 ```
 
@@ -242,6 +280,12 @@ lsof -ti:5174 | xargs kill -9
 1. `cloudflared`가 설치되어 있는지 확인: `bun run setup`
 2. 인터넷 연결 확인
 3. 원격 접속 페이지에서 터널 재시작 시도
+
+### 공식 앱이 로드되지 않음
+
+1. 서브모듈이 초기화되어 있는지 확인: `git submodule update --init`
+2. 공식 앱 빌드: `bun run build:official-app`
+3. 빌드가 실패하면 `bun`이 설치되어 있는지 확인하고 다시 시도
 
 ---
 

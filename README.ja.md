@@ -39,6 +39,8 @@ OpenCode のような AI コーディングエージェントは、以下の条�
 | **デフォルトで安全** | セッションごとにランダムな 6 桁のアクセスコードを使用 |
 | **リアルタイムストリーミング** | Server-Sent Events による ライブメッセージストリーミング |
 | **フル機能対応** | すべての OpenCode 機能が Web UI でシームレスに動作 |
+| **公式 OpenCode UI** | 完全な機能を備えた OpenCode ウェブアプリにアクセス |
+| **クロスデバイス同期** | 複数のデバイス間でシームレスに作業を継続 |
 
 ---
 
@@ -52,16 +54,21 @@ OpenCode のような AI コーディングエージェントは、以下の条�
 ### インストール
 
 ```bash
-# リポジトリをクローン
-git clone https://github.com/realDuang/opencode-remote.git
+# リポジトリをクローン（サブモジュール含む）
+git clone --recursive https://github.com/realDuang/opencode-remote.git
 cd opencode-remote
 
 # 依存関係をインストール
 bun install
 
+# 公式 OpenCode アプリをビルド（初回のみ）
+bun run build:official-app
+
 # アプリケーションを起動
 bun run start
 ```
+
+> **注意**: `--recursive` なしでクローンした場合は、`git submodule update --init` を実行して OpenCode サブモジュールを初期化してください。
 
 ### 起動時の動作
 
@@ -86,6 +93,29 @@ Web UI: http://localhost:5174
 Use code: 847291
 ============================================================
 ```
+
+---
+
+## 2つの UI オプション
+
+OpenCode Remote は OpenCode にアクセスする2つの方法を提供します：
+
+### 1. シンプルチャット UI（デフォルト）
+
+クイックインタラクション向けに最適化された軽量でモバイルフレンドリーなチャットインターフェース。ログイン後、ルート URL でアクセスできます。
+
+### 2. 公式 OpenCode UI
+
+すべての機能を備えた完全な OpenCode ウェブアプリケーション。チャットページの右上にある **「公式 UI」** ボタンをクリックしてアクセスします。
+
+| 機能 | シンプルチャット UI | 公式 OpenCode UI |
+|------|-------------------|-----------------|
+| モバイル最適化 | ✅ | ⚠️ デスクトップ向け |
+| フル機能 | 基本チャット | ✅ 完全 |
+| クロスデバイス同期 | ✅ | ✅ |
+| 軽量 | ✅ | 重め |
+
+**クロスデバイス同期**: セッション状態（現在のプロジェクト、レイアウト設定）がすべてのデバイス間で自動的に同期されます。
 
 ---
 
@@ -177,6 +207,12 @@ bun run setup
 # 本番ビルド
 bun run build
 
+# 公式 OpenCode アプリをビルド/再ビルド
+bun run build:official-app
+
+# OpenCode サブモジュールを更新して公式アプリを再ビルド
+bun run update:official-app
+
 # 型チェック
 bunx tsc --noEmit
 ```
@@ -186,14 +222,16 @@ bunx tsc --noEmit
 ```
 opencode-remote/
 ├── src/
-│   ├── pages/           # ページコンポーネント (Chat, Login, Settings, RemoteAccess)
+│   ├── pages/           # ページコンポーネント (Chat, Login, Settings, RemoteAccess, OfficialApp)
 │   ├── components/      # UI コンポーネント
-│   ├── lib/             # コアライブラリ (API クライアント, 認証, i18n)
+│   ├── lib/             # コアライブラリ (API クライアント, 認証, i18n, ストレージ同期)
 │   ├── stores/          # 状態管理
 │   └── types/           # TypeScript 型定義
 ├── scripts/
 │   ├── start.ts         # 起動スクリプト
-│   └── setup.ts         # 依存関係セットアップ
+│   ├── setup.ts         # 依存関係セットアップ
+│   └── build-official-app.ts  # 公式アプリビルドスクリプト
+├── opencode/            # OpenCode サブモジュール（公式アプリ用）
 └── vite.config.ts       # Vite 設定（認証ミドルウェア含む）
 ```
 
@@ -242,6 +280,12 @@ lsof -ti:5174 | xargs kill -9
 1. `cloudflared` がインストールされていることを確認：`bun run setup`
 2. インターネット接続を確認
 3. リモートアクセスページからトンネルを再起動してみる
+
+### 公式アプリが読み込まれない
+
+1. サブモジュールが初期化されていることを確認：`git submodule update --init`
+2. 公式アプリをビルド：`bun run build:official-app`
+3. ビルドが失敗した場合、`bun` がインストールされていることを確認して再試行
 
 ---
 
