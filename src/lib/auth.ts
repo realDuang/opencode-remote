@@ -1,4 +1,6 @@
 import { logger } from "./logger";
+import { isElectron } from "./platform";
+import { authAPI } from "./electron-api";
 
 // ============================================================================
 // Types
@@ -179,6 +181,18 @@ export class Auth {
     if (!token) return false;
 
     try {
+      // Electron uses IPC
+      if (isElectron()) {
+        const result = await authAPI.validateToken(token);
+        if (result.valid && result.deviceId) {
+          this.saveDeviceId(result.deviceId);
+          return true;
+        }
+        this.clearAuth();
+        return false;
+      }
+
+      // Browser uses HTTP
       const response = await fetch("/api/auth/validate", {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -256,6 +270,18 @@ export class Auth {
    * Get list of all authorized devices
    */
   static async getDevices(): Promise<{ devices: DeviceInfo[]; currentDeviceId: string } | null> {
+    // Electron uses IPC
+    if (isElectron()) {
+      const { devicesAPI } = await import("./electron-api");
+      const devices = await devicesAPI.list();
+      const currentDeviceId = await devicesAPI.getCurrentDeviceId();
+      return {
+        devices: devices as DeviceInfo[],
+        currentDeviceId: currentDeviceId || "",
+      };
+    }
+
+    // Browser uses HTTP
     const token = this.getToken();
     if (!token) return null;
 
@@ -278,6 +304,13 @@ export class Auth {
    * Revoke access for a specific device
    */
   static async revokeDevice(deviceId: string): Promise<boolean> {
+    // Electron uses IPC
+    if (isElectron()) {
+      const { devicesAPI } = await import("./electron-api");
+      return devicesAPI.revoke(deviceId);
+    }
+
+    // Browser uses HTTP
     const token = this.getToken();
     if (!token) return false;
 
@@ -298,6 +331,13 @@ export class Auth {
    * Rename a device
    */
   static async renameDevice(deviceId: string, name: string): Promise<boolean> {
+    // Electron uses IPC
+    if (isElectron()) {
+      const { devicesAPI } = await import("./electron-api");
+      return devicesAPI.rename(deviceId, name);
+    }
+
+    // Browser uses HTTP
     const token = this.getToken();
     if (!token) return false;
 
@@ -322,6 +362,15 @@ export class Auth {
    * Revoke all devices except current
    */
   static async revokeOtherDevices(): Promise<{ success: boolean; revokedCount?: number }> {
+    // Electron uses IPC
+    if (isElectron()) {
+      const { devicesAPI } = await import("./electron-api");
+      const currentDeviceId = this.getDeviceId();
+      if (!currentDeviceId) return { success: false };
+      return devicesAPI.revokeOthers(currentDeviceId);
+    }
+
+    // Browser uses HTTP
     const token = this.getToken();
     if (!token) return { success: false };
 
@@ -344,8 +393,15 @@ export class Auth {
 
   /**
    * Get access code (for display in Remote Access page)
+   * In Electron, uses IPC
    */
   static async getAccessCode(): Promise<string | null> {
+    // Electron uses IPC
+    if (isElectron()) {
+      return authAPI.getAccessCode();
+    }
+
+    // Browser uses HTTP
     const token = this.getToken();
     if (!token) return null;
 
@@ -371,8 +427,14 @@ export class Auth {
 
   /**
    * Check if current request is from localhost
+   * In Electron, always returns true
    */
   static async isLocalAccess(): Promise<boolean> {
+    // Electron always treats as local access
+    if (isElectron()) {
+      return true;
+    }
+
     try {
       const response = await fetch("/api/system/is-local");
       if (response.ok) {
@@ -388,11 +450,24 @@ export class Auth {
 
   /**
    * Auto-authenticate for local access (localhost only)
+   * In Electron, uses IPC
    */
   static async localAuth(): Promise<{ success: boolean; error?: string }> {
     try {
       const deviceInfo = this.collectDeviceInfo();
 
+      // Electron uses IPC
+      if (isElectron()) {
+        const result = await authAPI.localAuth(deviceInfo);
+        if (result.success && result.token && result.deviceId) {
+          this.saveToken(result.token);
+          this.saveDeviceId(result.deviceId);
+          return { success: true };
+        }
+        return { success: false, error: result.error || "Local auth failed" };
+      }
+
+      // Browser uses HTTP
       const response = await fetch("/api/auth/local-auth", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -459,6 +534,12 @@ export class Auth {
   }
 
   static async getPendingRequests(): Promise<PendingRequest[]> {
+    // Electron uses IPC
+    if (isElectron()) {
+      return authAPI.getPendingRequests();
+    }
+
+    // Browser uses HTTP
     const token = this.getToken();
     if (!token) return [];
 
@@ -479,6 +560,12 @@ export class Auth {
   }
 
   static async approveRequest(requestId: string): Promise<boolean> {
+    // Electron uses IPC
+    if (isElectron()) {
+      return authAPI.approveRequest(requestId);
+    }
+
+    // Browser uses HTTP
     const token = this.getToken();
     if (!token) return false;
 
@@ -500,6 +587,12 @@ export class Auth {
   }
 
   static async denyRequest(requestId: string): Promise<boolean> {
+    // Electron uses IPC
+    if (isElectron()) {
+      return authAPI.denyRequest(requestId);
+    }
+
+    // Browser uses HTTP
     const token = this.getToken();
     if (!token) return false;
 

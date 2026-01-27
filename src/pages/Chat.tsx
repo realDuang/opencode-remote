@@ -10,6 +10,7 @@ import { Auth } from "../lib/auth";
 import { useNavigate } from "@solidjs/router";
 import { client } from "../lib/opencode-client";
 import { logger } from "../lib/logger";
+import { isElectron } from "../lib/platform";
 import { sessionStore, setSessionStore } from "../stores/session";
 import {
   messageStore,
@@ -81,7 +82,6 @@ export default function Chat() {
   // Mobile Sidebar State
   const [isSidebarOpen, setIsSidebarOpen] = createSignal(false);
   const [isMobile, setIsMobile] = createSignal(window.innerWidth < 768);
-  const [isLocalHost, setIsLocalHost] = createSignal(false);
 
   const [deleteProjectInfo, setDeleteProjectInfo] = createSignal<{
     projectID: string;
@@ -160,90 +160,98 @@ export default function Chat() {
 
   const initializeSession = async () => {
     logger.debug("[Init] Starting session initialization");
-    
-    const isValidToken = await Auth.checkDeviceToken();
-    if (!isValidToken) {
-      logger.debug("[Init] Device token invalid or revoked, redirecting to login");
-      Auth.clearAuth();
-      navigate("/login", { replace: true });
-      return;
-    }
-    
-    setSessionStore({ loading: true });
 
-    const projects = await client.listProjects();
-    logger.debug("[Init] Loaded projects:", projects);
-    
-    // Auto-hide global and invalid projects
-    for (const p of projects) {
-      if (!p.worktree || p.worktree === "/") {
-        ProjectStore.hide(p.id);
+    try {
+      // Initialize the OpenCode client with correct URL
+      await client.initialize();
+
+      const isValidToken = await Auth.checkDeviceToken();
+      if (!isValidToken) {
+        logger.debug("[Init] Device token invalid or revoked, redirecting to login");
+        Auth.clearAuth();
+        navigate("/login", { replace: true });
+        return;
       }
+
+      setSessionStore({ loading: true });
+
+      const projects = await client.listProjects();
+      logger.debug("[Init] Loaded projects:", projects);
+
+      // Auto-hide global and invalid projects
+      for (const p of projects) {
+        if (!p.worktree || p.worktree === "/") {
+          ProjectStore.hide(p.id);
+        }
+      }
+
+      const hiddenIds = ProjectStore.getHiddenIds();
+      logger.debug("[Init] Hidden project IDs:", hiddenIds);
+
+      const validProjects = projects.filter((p) => {
+        const isHidden = ProjectStore.isHidden(p.id);
+        logger.debug(`[Init] Project ${p.id} (${p.worktree}) isHidden: ${isHidden}`);
+        return !isHidden;
+      });
+      const sessionPromises = validProjects.map((p) =>
+        client.listSessionsForDirectory(p.worktree).catch((err) => {
+          logger.error(`[Init] Failed to load sessions for ${p.worktree}:`, err);
+          return [] as Session.Info[];
+        })
+      );
+      const sessionArrays = await Promise.all(sessionPromises);
+      const sessions = sessionArrays.flat();
+      logger.debug("[Init] Loaded sessions:", sessions);
+
+      const processedSessions = sessions.map((s) => ({
+        id: s.id,
+        title: s.title || "",
+        directory: s.directory || "",
+        projectID: s.projectID,
+        parentID: s.parentID,
+        createdAt: new Date(s.time.created).toISOString(),
+        updatedAt: new Date(s.time.updated).toISOString(),
+        summary: s.summary,
+      }));
+
+      processedSessions.sort((a, b) =>
+        new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+      );
+
+      let currentSession = processedSessions[0];
+      if (!currentSession) {
+        logger.debug("[Init] No sessions found, creating new one");
+        const newSession = await client.createSession();
+        currentSession = {
+          id: newSession.id,
+          title: newSession.title || "",
+          directory: newSession.directory || "",
+          projectID: newSession.projectID,
+          parentID: newSession.parentID,
+          createdAt: new Date(newSession.time.created).toISOString(),
+          updatedAt: new Date(newSession.time.updated).toISOString(),
+          summary: newSession.summary,
+        };
+        processedSessions.push(currentSession);
+      }
+
+      // Set directory context for API requests
+      if (currentSession.directory) {
+        client.setDirectory(currentSession.directory);
+      }
+
+      setSessionStore({
+        list: processedSessions,
+        projects: validProjects,
+        current: currentSession.id,
+        loading: false,
+      });
+
+      await loadSessionMessages(currentSession.id);
+    } catch (error) {
+      logger.error("[Init] Session initialization failed:", error);
+      setSessionStore({ loading: false });
     }
-    
-    const hiddenIds = ProjectStore.getHiddenIds();
-    logger.debug("[Init] Hidden project IDs:", hiddenIds);
-    
-    const validProjects = projects.filter((p) => {
-      const isHidden = ProjectStore.isHidden(p.id);
-      logger.debug(`[Init] Project ${p.id} (${p.worktree}) isHidden: ${isHidden}`);
-      return !isHidden;
-    });
-    const sessionPromises = validProjects.map((p) =>
-      client.listSessionsForDirectory(p.worktree).catch((err) => {
-        logger.error(`[Init] Failed to load sessions for ${p.worktree}:`, err);
-        return [] as Session.Info[];
-      })
-    );
-    const sessionArrays = await Promise.all(sessionPromises);
-    const sessions = sessionArrays.flat();
-    logger.debug("[Init] Loaded sessions:", sessions);
-
-    const processedSessions = sessions.map((s) => ({
-      id: s.id,
-      title: s.title || "",
-      directory: s.directory || "",
-      projectID: s.projectID,
-      parentID: s.parentID,
-      createdAt: new Date(s.time.created).toISOString(),
-      updatedAt: new Date(s.time.updated).toISOString(),
-      summary: s.summary,
-    }));
-
-    processedSessions.sort((a, b) => 
-      new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
-    );
-
-    let currentSession = processedSessions[0];
-    if (!currentSession) {
-      logger.debug("[Init] No sessions found, creating new one");
-      const newSession = await client.createSession();
-      currentSession = {
-        id: newSession.id,
-        title: newSession.title || "",
-        directory: newSession.directory || "",
-        projectID: newSession.projectID,
-        parentID: newSession.parentID,
-        createdAt: new Date(newSession.time.created).toISOString(),
-        updatedAt: new Date(newSession.time.updated).toISOString(),
-        summary: newSession.summary,
-      };
-      processedSessions.push(currentSession);
-    }
-
-    // Set directory context for API requests
-    if (currentSession.directory) {
-      client.setDirectory(currentSession.directory);
-    }
-
-    setSessionStore({
-      list: processedSessions,
-      projects: validProjects,
-      current: currentSession.id,
-      loading: false,
-    });
-
-    await loadSessionMessages(currentSession.id);
   };
 
   // Switch session
@@ -578,7 +586,6 @@ export default function Chat() {
 
   createEffect(() => {
     initializeSession();
-    Auth.isLocalAccess().then(setIsLocalHost);
 
     const cleanup = client.connectSSE(handleSSEEvent);
     onCleanup(cleanup);
@@ -598,7 +605,7 @@ export default function Chat() {
       {/* Sidebar - Desktop: Static, Mobile: Drawer */}
       <aside
         class={`
-          fixed md:static inset-y-0 left-0 z-30 w-72 bg-gray-50 dark:bg-zinc-950 border-r border-gray-200 dark:border-zinc-800 transform transition-transform duration-300 ease-in-out flex flex-col justify-between
+          fixed md:static inset-y-0 left-0 z-30 w-72 bg-gray-50 dark:bg-zinc-950 border-r border-gray-200 dark:border-zinc-800 transform transition-transform duration-300 ease-in-out flex flex-col justify-between electron-safe-top
           ${isSidebarOpen() ? "translate-x-0" : "-translate-x-full md:translate-x-0"}
         `}
       >
@@ -622,7 +629,7 @@ export default function Chat() {
 
         {/* User Actions Footer in Sidebar */}
         <div class="p-3 border-t border-gray-200 dark:border-zinc-800 space-y-1 bg-gray-50 dark:bg-zinc-950">
-          <Show when={isLocalHost()}>
+          <Show when={isElectron()}>
             <button
               onClick={() => navigate("/")}
               class="w-full flex items-center gap-3 px-3 py-2 text-sm font-medium text-gray-600 dark:text-gray-400 hover:bg-white dark:hover:bg-zinc-800 hover:text-gray-900 dark:hover:text-white rounded-lg transition-all shadow-xs hover:shadow-sm"
@@ -649,11 +656,11 @@ export default function Chat() {
       </aside>
 
       {/* Main Chat Area */}
-      <div class="flex-1 flex flex-col overflow-hidden min-w-0 bg-white dark:bg-zinc-900">
+      <div class="flex-1 flex flex-col overflow-hidden min-w-0 bg-white dark:bg-zinc-900 electron-safe-top">
 
         {/* Header */}
-        <header class="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-zinc-800/50 bg-white/80 dark:bg-zinc-900/80 backdrop-blur-xs sticky top-0 z-10">
-          <div class="flex items-center gap-3">
+        <header class="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-zinc-800/50 bg-white/80 dark:bg-zinc-900/80 backdrop-blur-xs sticky top-0 z-10 electron-drag-region">
+          <div class="flex items-center gap-3 electron-no-drag">
             <button
               onClick={toggleSidebar}
               class="md:hidden p-2 -ml-2 text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-zinc-800 rounded-lg transition-colors"

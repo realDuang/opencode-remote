@@ -1,8 +1,8 @@
-import { createSignal, createResource, For, Show, type JSX } from "solid-js";
+import { createSignal, createResource, For, Show, onMount, type JSX } from "solid-js";
 import { useNavigate } from "@solidjs/router";
 import { Auth, type DeviceInfo } from "../lib/auth";
 import { useI18n, formatMessage } from "../lib/i18n";
-import { useAuthGuard } from "../lib/useAuthGuard";
+import { isElectron } from "../lib/platform";
 
 // ============================================================================
 // Helper Functions
@@ -160,7 +160,13 @@ export default function Devices() {
   const navigate = useNavigate();
   const { t } = useI18n();
 
-  useAuthGuard("Devices");
+  // Devices page is only accessible in Electron (host mode)
+  // Web clients should be redirected to chat
+  onMount(() => {
+    if (!isElectron()) {
+      navigate("/chat", { replace: true });
+    }
+  });
 
   const [devicesData, { refetch }] = createResource(() => Auth.getDevices());
   const [renamingDevice, setRenamingDevice] = createSignal<string | null>(null);
@@ -214,12 +220,12 @@ export default function Devices() {
   };
 
   return (
-    <div class="flex flex-col h-screen bg-gray-50/50 dark:bg-zinc-950 font-sans text-gray-900 dark:text-gray-100">
+    <div class="flex flex-col h-screen bg-gray-50/50 dark:bg-zinc-950 font-sans text-gray-900 dark:text-gray-100 electron-safe-top">
       {/* Header */}
-      <header class="sticky top-0 z-10 backdrop-blur-md bg-white/70 dark:bg-zinc-900/70 border-b border-gray-200 dark:border-zinc-800 px-4 h-14 flex items-center justify-between">
-        <div class="flex items-center gap-2">
+      <header class="sticky top-0 z-10 backdrop-blur-md bg-white/70 dark:bg-zinc-900/70 border-b border-gray-200 dark:border-zinc-800 px-4 h-14 flex items-center justify-between electron-drag-region">
+        <div class="flex items-center gap-2 electron-no-drag">
           <button
-            onClick={() => navigate("/remote")}
+            onClick={() => navigate("/")}
             class="p-2 -ml-2 rounded-lg hover:bg-gray-100 dark:hover:bg-zinc-800 text-gray-600 dark:text-gray-400 transition-colors"
           >
             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">

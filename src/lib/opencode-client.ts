@@ -1,14 +1,48 @@
 import { MessageV2, Session, Config, Permission, Project } from "../types/opencode";
 import { logger } from "./logger";
+import { isElectron } from "./platform";
+import { opencodeAPI } from "./electron-api";
 
 export class OpenCodeClient {
   private baseUrl: string;
   private currentDirectory: string | null = null;
+  private initialized: boolean = false;
 
   constructor(baseUrl?: string) {
-    // Read configured server URL from localStorage, use default if not found
+    // Read configured server URL from localStorage
     const savedUrl = localStorage.getItem("opencode_server_url");
-    this.baseUrl = baseUrl || savedUrl || "/opencode-api";
+
+    if (isElectron()) {
+      // Electron: use saved URL or default to localhost:4096
+      this.baseUrl = baseUrl || savedUrl || "http://localhost:4096";
+    } else {
+      // Browser: only use saved URL if it's a relative path (proxy)
+      // Ignore absolute URLs like http://localhost:4096 as they won't work in browser
+      const isRelativePath = savedUrl && savedUrl.startsWith("/");
+      this.baseUrl = baseUrl || (isRelativePath ? savedUrl : "/opencode-api");
+    }
+  }
+
+  /**
+   * Initialize the client with the correct port from Electron
+   * Should be called once when the app starts
+   */
+  async initialize(): Promise<void> {
+    if (this.initialized) return;
+    this.initialized = true;
+
+    // In Electron, get the actual OpenCode port dynamically
+    if (isElectron()) {
+      try {
+        const port = await opencodeAPI.getPort();
+        const savedUrl = localStorage.getItem("opencode_server_url");
+        if (!savedUrl) {
+          this.baseUrl = `http://localhost:${port}`;
+        }
+      } catch (e) {
+        logger.error("[OpenCodeClient] Failed to get OpenCode port:", e);
+      }
+    }
   }
 
   // Set server URL

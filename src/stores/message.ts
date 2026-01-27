@@ -1,18 +1,18 @@
 import { createStore } from "solid-js/store";
 import { MessageV2, Permission } from "../types/opencode";
 
-// 与 opencode desktop 完全一致的存储结构
+// Storage structure consistent with opencode desktop
 export const [messageStore, setMessageStore] = createStore<{
   message: {
-    [sessionID: string]: MessageV2.Info[];  // 按 sessionID 分组，数组按 id 排序
+    [sessionID: string]: MessageV2.Info[];  // Grouped by sessionID, array sorted by id
   };
   part: {
-    [messageID: string]: MessageV2.Part[];  // 按 messageID 分组，数组按 id 排序
+    [messageID: string]: MessageV2.Part[];  // Grouped by messageID, array sorted by id
   };
   permission: {
-    [sessionID: string]: Permission.Request[];  // 按 sessionID 分组的权限请求队列
+    [sessionID: string]: Permission.Request[];  // Permission request queue grouped by sessionID
   };
-  // 折叠/展开状态，以 partID 或特殊 key 为索引
+  // Collapse/expand state, indexed by partID or special key
   expanded: {
     [key: string]: boolean;
   };

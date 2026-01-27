@@ -1,21 +1,23 @@
 import { createSignal, onMount, onCleanup, For, Show } from "solid-js";
 import { Auth, type PendingRequest } from "../lib/auth";
 import { useI18n } from "../lib/i18n";
+import { isElectron } from "../lib/platform";
 
 export function AccessRequestNotification() {
   const { t } = useI18n();
   const [requests, setRequests] = createSignal<PendingRequest[]>([]);
-  const [isLocal, setIsLocal] = createSignal(false);
+  const [isHost, setIsHost] = createSignal(false);
   const [processingIds, setProcessingIds] = createSignal<Set<string>>(new Set());
   const [feedback, setFeedback] = createSignal<Record<string, "approved" | "denied" | null>>({});
 
   let pollInterval: Timer | null = null;
 
   onMount(async () => {
-    const local = await Auth.isLocalAccess();
-    setIsLocal(local);
+    // Only Electron (host) can see and handle approval notifications
+    const hostMode = isElectron();
+    setIsHost(hostMode);
 
-    if (local) {
+    if (hostMode) {
       fetchRequests();
       pollInterval = setInterval(fetchRequests, 3000);
     }
@@ -31,9 +33,9 @@ export function AccessRequestNotification() {
       setRequests((prev) => {
         const processing = new Set(processingIds());
         const newIds = new Set(pending.map(r => r.id));
-        
+
         const keptProcessing = prev.filter(r => processing.has(r.id) && !newIds.has(r.id));
-        
+
         return [...pending, ...keptProcessing];
       });
     } catch (err) {
@@ -90,7 +92,7 @@ export function AccessRequestNotification() {
   };
 
   return (
-    <Show when={isLocal() && requests().length > 0}>
+    <Show when={isHost() && requests().length > 0}>
       <div 
         class="fixed bottom-6 right-6 z-50 flex flex-col gap-4 w-96 max-w-[calc(100vw-3rem)] font-sans"
       >
