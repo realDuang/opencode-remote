@@ -330,7 +330,7 @@ export default function OfficialApp() {
             onLoad={handleIframeLoad}
             onError={handleIframeError}
             title="OpenCode Official App"
-            sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals"
+            // Same-origin iframe, sandbox not needed (allow-scripts + allow-same-origin together effectively disables sandbox)
           />
         </Show>
       </div>

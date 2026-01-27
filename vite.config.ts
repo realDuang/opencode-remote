@@ -138,7 +138,13 @@ export default defineConfig({
               "Content-Type",
               mimeTypes[ext] || "application/octet-stream",
             );
-            fs.createReadStream(filePath).pipe(res);
+            const stream = fs.createReadStream(filePath);
+            stream.on("error", (err) => {
+              console.error("[Static] Error reading file:", err);
+              res.statusCode = 500;
+              res.end("Internal Server Error");
+            });
+            stream.pipe(res);
             return;
           }
 
@@ -918,7 +924,7 @@ export default defineConfig({
     host: true,
     allowedHosts: true, // Allow all hosts (localhost, LAN IPs, tunnels)
     watch: {
-      ignored: ["**/.sync-state.json", "**/.auth-code", "**/.devices.json", "**/.storage-sync.json"],
+      ignored: [".sync-state.json", ".auth-code", ".devices.json", ".storage-sync.json"],
     },
     proxy: (() => {
       const authHeaders = getOpenCodeAuthHeader();

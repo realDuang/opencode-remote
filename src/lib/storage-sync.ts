@@ -160,12 +160,12 @@ function mergeServerData(
     logger.debug("[StorageSync] Synced projects from server:", serverWorktrees.size);
   }
 
-  const lastProjectValue = serverLastProject["local"] || 
+  const fallbackProjectPath = serverLastProject["local"] || 
     (serverWorktrees.size > 0 ? Array.from(serverWorktrees)[0] : null);
   
-  if (lastProjectValue) {
+  if (fallbackProjectPath) {
     const newLastProject: Record<string, string> = { ...serverLastProject };
-    newLastProject[currentSource] = lastProjectValue;
+    newLastProject[currentSource] = fallbackProjectPath;
     local.lastProject = newLastProject;
     changed = true;
   }
