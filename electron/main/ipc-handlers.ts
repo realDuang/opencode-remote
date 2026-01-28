@@ -3,6 +3,7 @@ import os from "os";
 import { deviceStore } from "./services/device-store";
 import { tunnelManager } from "./services/tunnel-manager";
 import { opencodeProcess } from "./services/opencode-process";
+import { productionServer } from "./services/production-server";
 
 export function registerIpcHandlers(): void {
   // ===========================================================================
@@ -144,7 +145,11 @@ export function registerIpcHandlers(): void {
   // ===========================================================================
 
   ipcMain.handle("tunnel:start", async (_, port: number) => {
-    return tunnelManager.start(port);
+    // In production, use the production server port if available
+    const actualPort = app.isPackaged && productionServer.isRunning()
+      ? productionServer.getPort()
+      : port;
+    return tunnelManager.start(actualPort);
   });
 
   ipcMain.handle("tunnel:stop", async () => {
@@ -153,6 +158,18 @@ export function registerIpcHandlers(): void {
 
   ipcMain.handle("tunnel:getStatus", async () => {
     return tunnelManager.getInfo();
+  });
+
+  // ===========================================================================
+  // Production Server Management
+  // ===========================================================================
+
+  ipcMain.handle("server:getPort", async () => {
+    return productionServer.getPort();
+  });
+
+  ipcMain.handle("server:isRunning", async () => {
+    return productionServer.isRunning();
   });
 
   // ===========================================================================

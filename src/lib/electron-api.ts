@@ -242,3 +242,16 @@ export const opencodeAPI = {
     return api ? api.opencode.getPort() : 4096;
   },
 };
+
+// Production Server API
+export const serverAPI = {
+  async getPort(): Promise<number> {
+    const api = getElectronAPI();
+    return api?.server ? api.server.getPort() : 5173;
+  },
+
+  async isRunning(): Promise<boolean> {
+    const api = getElectronAPI();
+    return api?.server ? api.server.isRunning() : false;
+  },
+};

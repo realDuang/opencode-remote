@@ -44,6 +44,12 @@ const electronAPI = {
     getStatus: () => ipcRenderer.invoke("opencode:getStatus"),
     getPort: () => ipcRenderer.invoke("opencode:getPort"),
   },
+
+  // Production server API
+  server: {
+    getPort: () => ipcRenderer.invoke("server:getPort"),
+    isRunning: () => ipcRenderer.invoke("server:isRunning"),
+  },
 };
 
 contextBridge.exposeInMainWorld("electronAPI", electronAPI);
