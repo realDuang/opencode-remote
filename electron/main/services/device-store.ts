@@ -139,14 +139,12 @@ class DeviceStore {
     if (!this.data) {
       throw new Error("DeviceStore not initialized. Call init() after app.whenReady()");
     }
-    // Note: No longer auto-reload in dev mode
-    // Now only Electron reads/writes .devices.json, no need to sync with Web side
     return this.data;
   }
 
   private getDevicesFilePath(): string {
-    // In development mode, use the same file as the API middleware
-    // so that Electron and Web share the same device data
+    // In development mode, Electron and Web side share the same .devices.json file.
+    // This may cause race conditions but is acceptable for dev purposes.
     if (!app.isPackaged) {
       return path.join(process.cwd(), ".devices.json");
     }
