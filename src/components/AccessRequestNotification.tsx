@@ -13,14 +13,8 @@ export function AccessRequestNotification() {
   let pollInterval: Timer | null = null;
 
   onMount(async () => {
-    // Host mode: Electron OR localhost web access can see and handle approval notifications
-    let hostMode = isElectron();
-    
-    if (!hostMode) {
-      // Check if this is localhost web access
-      hostMode = await Auth.isLocalAccess();
-    }
-    
+    // Only Electron (host) can see and handle approval notifications
+    const hostMode = isElectron();
     setIsHost(hostMode);
 
     if (hostMode) {

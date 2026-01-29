@@ -20,7 +20,7 @@ export default function EntryPage() {
 
   // Access detection states
   const [checking, setChecking] = createSignal(true);
-  // isHost: true in Electron OR localhost web access (show remote access config)
+  // isHost: true only in Electron (host mode), false for all Web clients
   const [isHost, setIsHost] = createSignal(false);
 
   // Login form states (for remote access)
@@ -51,13 +51,14 @@ export default function EntryPage() {
   onMount(async () => {
     logger.debug("[EntryPage] Mounted, checking access type...");
 
-    // Host mode: Electron OR localhost web access
-    const inElectron = isElectron();
-    logger.debug("[EntryPage] Is Electron:", inElectron);
+    // Host mode: only Electron is considered host
+    // All Web clients (including localhost) are treated as clients
+    const hostMode = isElectron();
+    logger.debug("[EntryPage] Is host (Electron):", hostMode);
+    setIsHost(hostMode);
 
-    // For Electron, always host mode
-    if (inElectron) {
-      setIsHost(true);
+    // For Electron (host), always show config page (don't auto-redirect to chat)
+    if (hostMode) {
       setChecking(false);
       loadLocalModeData();
       return;
@@ -65,29 +66,6 @@ export default function EntryPage() {
 
     // For Web clients, check if already authenticated
     const hasValidToken = await Auth.checkDeviceToken();
-    
-    // Check if accessing from localhost
-    const isLocal = await Auth.isLocalAccess();
-    logger.debug("[EntryPage] Is localhost:", isLocal);
-
-    if (isLocal) {
-      // Localhost web access - treat as host mode (show remote access config)
-      setIsHost(true);
-      setChecking(false);
-      
-      // Auto-authenticate if not already
-      if (!hasValidToken) {
-        const authResult = await Auth.localAuth();
-        if (!authResult.success) {
-          logger.error("[EntryPage] Local auth failed:", authResult.error);
-        }
-      }
-      
-      loadLocalModeData();
-      return;
-    }
-
-    // Remote access - check auth and show login if needed
     if (hasValidToken) {
       logger.debug("[EntryPage] Already authenticated, redirecting to chat");
       navigate("/chat", { replace: true });
