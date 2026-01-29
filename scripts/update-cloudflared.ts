@@ -48,16 +48,24 @@ const ALL_PLATFORMS: Platform[] = [
  */
 function getPlatformsToDownload(): Platform[] {
   const currentPlatform = process.platform; // "darwin" or "win32"
+  const systemArch = process.arch; // "arm64" or "x64"
+  const envTargetArch = process.env.TARGET_ARCH;
+  
+  // Debug logging for CI troubleshooting
+  console.log(`🔍 System info: platform=${currentPlatform}, arch=${systemArch}`);
+  console.log(`🔍 TARGET_ARCH env: ${envTargetArch || "(not set)"}`);
+  
   // Allow TARGET_ARCH env var to override (for CI cross-compilation)
-  const targetArch = process.env.TARGET_ARCH || (process.arch === "arm64" ? "arm64" : "x64");
+  const targetArch = envTargetArch || (systemArch === "arm64" ? "arm64" : "x64");
   
   const filtered = ALL_PLATFORMS.filter(
     (p) => p.name === currentPlatform && p.arch === targetArch
   );
   
   if (filtered.length === 0) {
-    console.log(`⚠️  No matching platform for ${currentPlatform}-${targetArch}, downloading all platforms`);
-    return ALL_PLATFORMS;
+    console.error(`❌ No matching platform for ${currentPlatform}-${targetArch}`);
+    console.error(`   Available platforms: ${ALL_PLATFORMS.map(p => `${p.name}-${p.arch}`).join(", ")}`);
+    process.exit(1);
   }
   
   console.log(`🔧 Downloading for platform: ${currentPlatform}-${targetArch}`);
