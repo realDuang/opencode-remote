@@ -74,8 +74,20 @@ function getPlatformsToDownload(): Platform[] {
 
 async function downloadFile(url: string, destPath: string): Promise<void> {
   console.log(`  Downloading from: ${url}`);
+  
+  // Build headers with optional GitHub token for downloads from GitHub
+  const headers: Record<string, string> = {
+    "User-Agent": "opencode-remote-updater",
+  };
+  
+  // Use GITHUB_TOKEN if available (helps with rate limits for GitHub downloads)
+  const githubToken = process.env.GITHUB_TOKEN;
+  if (githubToken && url.includes("github.com")) {
+    headers["Authorization"] = `Bearer ${githubToken}`;
+  }
+  
   const response = await fetch(url, {
-    headers: { "User-Agent": "opencode-remote-updater" },
+    headers,
     redirect: "follow",
   });
 

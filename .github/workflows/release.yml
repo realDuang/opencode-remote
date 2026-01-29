@@ -62,11 +62,15 @@ jobs:
     name: Build macOS (${{ matrix.arch }})
     needs: check-version
     if: needs.check-version.outputs.should_release == 'true'
-    runs-on: macos-latest
+    runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
       matrix:
-        arch: [arm64, x64]
+        include:
+          - arch: arm64
+            runner: macos-latest
+          - arch: x64
+            runner: macos-13
 
     steps:
       - name: Checkout repository
@@ -84,11 +88,13 @@ jobs:
         run: bun run update:opencode
         env:
           TARGET_ARCH: ${{ matrix.arch }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Download Cloudflared binary
         run: bun run update:cloudflared
         env:
           TARGET_ARCH: ${{ matrix.arch }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build app
         run: bun run build
@@ -128,9 +134,13 @@ jobs:
 
       - name: Download OpenCode binary
         run: bun run update:opencode
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Download Cloudflared binary
         run: bun run update:cloudflared
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build app
         run: bun run build

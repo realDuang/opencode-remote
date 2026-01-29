@@ -116,12 +116,23 @@ function getPlatformsToDownload(): Platform[] {
 
 async function getLatestRelease(): Promise<{ tag_name: string; assets: any[] }> {
   const url = `https://api.github.com/repos/${GITHUB_REPO}/releases/latest`;
+  
+  // Build headers with optional GitHub token for higher rate limits
+  const headers: Record<string, string> = {
+    Accept: "application/vnd.github.v3+json",
+    "User-Agent": "opencode-remote-updater",
+  };
+  
+  // Use GITHUB_TOKEN if available (provides 5000 req/hr instead of 60)
+  const githubToken = process.env.GITHUB_TOKEN;
+  if (githubToken) {
+    headers["Authorization"] = `Bearer ${githubToken}`;
+    console.log("🔑 Using GitHub token for API authentication");
+  }
+  
   const response = await fetch(url, {
     redirect: "follow",
-    headers: {
-      Accept: "application/vnd.github.v3+json",
-      "User-Agent": "opencode-remote-updater",
-    },
+    headers,
   });
 
   if (!response.ok) {
