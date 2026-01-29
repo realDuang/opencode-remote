@@ -3,6 +3,8 @@ name: Build and Release
 on:
   push:
     branches: [main]
+    tags:
+      - 'v*'
   pull_request:
     branches: [main]
 
@@ -42,7 +44,18 @@ jobs:
             exit 0
           fi
           
-          # Get current version from package.json
+          # For tag pushes, extract version from tag
+          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            VERSION="${{ github.ref_name }}"
+            VERSION="${VERSION#v}"  # Remove 'v' prefix
+            echo "Tag push detected: v$VERSION"
+            echo "should_release=true" >> $GITHUB_OUTPUT
+            echo "is_pr=false" >> $GITHUB_OUTPUT
+            echo "version=$VERSION" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          
+          # For main branch push, check package.json version
           CURRENT_VERSION=$(node -p "require('./package.json').version")
           echo "Current version: $CURRENT_VERSION"
           
