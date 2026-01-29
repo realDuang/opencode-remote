@@ -64,6 +64,7 @@ jobs:
     if: needs.check-version.outputs.should_release == 'true'
     runs-on: macos-latest
     strategy:
+      fail-fast: false
       matrix:
         arch: [arm64, x64]
 
@@ -81,9 +82,13 @@ jobs:
 
       - name: Download OpenCode binary
         run: bun run update:opencode
+        env:
+          TARGET_ARCH: ${{ matrix.arch }}
 
       - name: Download Cloudflared binary
         run: bun run update:cloudflared
+        env:
+          TARGET_ARCH: ${{ matrix.arch }}
 
       - name: Build app
         run: bun run build

@@ -63,7 +63,7 @@ interface Platform {
   binaryName: string;
 }
 
-const PLATFORMS: Platform[] = [
+const ALL_PLATFORMS: Platform[] = [
   {
     name: "darwin",
     arch: "arm64",
@@ -83,6 +83,28 @@ const PLATFORMS: Platform[] = [
     binaryName: "opencode.exe",
   },
 ];
+
+/**
+ * Get the platform to download based on current system or TARGET_ARCH env var.
+ * TARGET_ARCH can be set to override the architecture (useful for cross-compilation in CI).
+ */
+function getPlatformsToDownload(): Platform[] {
+  const currentPlatform = process.platform; // "darwin" or "win32"
+  // Allow TARGET_ARCH env var to override (for CI cross-compilation)
+  const targetArch = process.env.TARGET_ARCH || (process.arch === "arm64" ? "arm64" : "x64");
+  
+  const filtered = ALL_PLATFORMS.filter(
+    (p) => p.name === currentPlatform && p.arch === targetArch
+  );
+  
+  if (filtered.length === 0) {
+    console.log(`⚠️  No matching platform for ${currentPlatform}-${targetArch}, downloading all platforms`);
+    return ALL_PLATFORMS;
+  }
+  
+  console.log(`🔧 Downloading for platform: ${currentPlatform}-${targetArch}`);
+  return filtered;
+}
 
 async function getLatestRelease(): Promise<{ tag_name: string; assets: any[] }> {
   const url = `https://api.github.com/repos/${GITHUB_REPO}/releases/latest`;
@@ -141,7 +163,8 @@ async function updateOpencode(): Promise<void> {
     console.log(`📦 Latest version: ${release.tag_name}`);
     console.log(`📁 Found ${release.assets.length} assets`);
 
-    for (const platform of PLATFORMS) {
+    const platformsToDownload = getPlatformsToDownload();
+    for (const platform of platformsToDownload) {
       const dirPath = join(RESOURCES_DIR, `${platform.name}-${platform.arch}`);
 
       if (!existsSync(dirPath)) {
