@@ -7,26 +7,35 @@ icon: public/assets/icon.png
 files:
   - out/**/*
   - package.json
-extraResources:
-  - from: resources/bin
-    to: bin
-    filter:
-      - "**/*"
-  - from: resources/cloudflared
-    to: cloudflared
-    filter:
-      - "**/*"
 extraMetadata:
   main: out/main/index.js
 mac:
   target: dmg
   icon: public/assets/icon.png
+  extraResources:
+    - from: resources/bin/darwin-${arch}
+      to: bin/darwin-${arch}
+      filter:
+        - "**/*"
+    - from: resources/cloudflared/darwin-${arch}
+      to: cloudflared/darwin-${arch}
+      filter:
+        - "**/*"
 win:
   target:
     - target: nsis
       arch:
         - x64
   icon: public/assets/icon.ico
+  extraResources:
+    - from: resources/bin/win32-${arch}
+      to: bin/win32-${arch}
+      filter:
+        - "**/*"
+    - from: resources/cloudflared/win32-${arch}
+      to: cloudflared/win32-${arch}
+      filter:
+        - "**/*"
 nsis:
   oneClick: false
   perMachine: false
